@@ -6,7 +6,7 @@ authors = ["AmeerArsala <ameer.arsala03@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "3.11.4"
 fastapi = "0.88.0"
 pytest = "7.1.3"
 uvicorn = "0.20.0"
