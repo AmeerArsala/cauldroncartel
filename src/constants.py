@@ -1,0 +1,5 @@
+RED = 0
+BLUE = 1
+GREEN = 2
+
+ML_PER_BOTTLE = 100
