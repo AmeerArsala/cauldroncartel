@@ -52,7 +52,7 @@ def purchase_barrels(barrels_delivered: list[Barrel]):
     # Update the DB by diminishing gold and increasing ml (barrels)
     with db.engine.begin() as conn:
         select_result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-        row = select_result[0]
+        row = select_result.first()
 
         current_green_ml = row["num_green_ml"] + total_green_ml
         current_red_ml = row["num_red_ml"] + total_red_ml
@@ -95,7 +95,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     with db.engine.begin() as conn:
         result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
 
-    row = result[0]  # Only one row rn
+    row = result.first()  # Only one row rn
 
     if row["num_green_potions"] < 10:
         # Purchase a new small green potion barrel

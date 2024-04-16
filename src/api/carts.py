@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
-from src.api import auth
+from pydantic import BaseModel, Field
+from src.api import auth, catalog
 from enum import Enum
+import uuid
 
 import sqlalchemy
 from src import database as db
@@ -24,6 +25,53 @@ class search_sort_options(str, Enum):
 class search_sort_order(str, Enum):
     asc = "asc"
     desc = "desc"
+
+
+class CartItem(BaseModel):
+    sku: str
+    quantity: int
+
+
+class Cart(BaseModel):
+    cart_id: int = Field(default_factory=uuid.uuid4().int)
+    cart_items: dict[str, CartItem] = Field(default={})
+
+    def total_num_items(self, name_starts_with: str = "") -> int:
+        num_items: int = 0
+        for cart_item in self.cart_items.values():
+            if name_starts_with == "" or cart_item.sku.startswith(name_starts_with):
+                num_items += cart_item.quantity
+
+        return num_items
+
+    def total_price(self) -> int:
+        price: int = 0
+        full_catalog: list[dict[str, str]] = catalog.get_catalog()
+
+        def find_catalog_item(sku: str):
+            for item in full_catalog:
+                if item["sku"] == sku:
+                    return item
+
+            return {"price": 0}  # default value
+
+        for cart_item in self.cart_items.values():
+            price += find_catalog_item(cart_item.sku)["price"] * cart_item.quantity
+
+        return price
+
+
+class Customer(BaseModel):
+    customer_name: str
+    character_class: str
+    level: int
+
+
+class CartCheckout(BaseModel):
+    payment: str
+
+
+carts: dict[int, Cart] = {}
 
 
 @router.get("/search/", tags=["search"])
@@ -74,12 +122,6 @@ def search_orders(
     }
 
 
-class Customer(BaseModel):
-    customer_name: str
-    character_class: str
-    level: int
-
-
 @router.post("/visits/{visit_id}")
 def post_visits(visit_id: int, customers: list[Customer]):
     """
@@ -93,44 +135,62 @@ def post_visits(visit_id: int, customers: list[Customer]):
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
-    return {"cart_id": 1}
+    global carts
 
+    cart: Cart = Cart()
+    carts[cart.cart_id] = cart
 
-class CartItem(BaseModel):
-    quantity: int
+    return cart.dict()
 
 
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
+    global carts
+
+    cart: Cart = carts[cart_id]
+
+    cart.cart_items[item_sku] = CartItem(sku=item_sku, quantity=cart_item.quantity)
 
     return "OK"
-
-
-class CartCheckout(BaseModel):
-    payment: str
 
 
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
+    global carts
 
-    result = {"total_potions_bought": 1, "total_gold_paid": 50}
+    cart: Cart = carts[cart_id]
+
+    # Calculate result
+    total_potions_bought = cart.total_num_items()
+
+    total_green_potions_bought: int = cart.total_num_items(name_starts_with="GREEN")
+    total_red_potions_bought: int = cart.total_num_items(name_starts_with="RED")
+    total_blue_potions_bought: int = cart.total_num_items(name_starts_with="BLUE")
+
+    total_gold_paid: int = cart.total_price()
 
     with db.engine.begin() as conn:
         select_result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-        row = select_result[0]
+        row = select_result.first()
 
         # Calculate update
-        current_green_potions: int = row["num_green_potions"] - 1
-        # current_green_ml: int = row["num_green_ml"] - 50
-        current_gold: int = row["gold"] + result["total_gold_paid"]
+        current_green_potions: int = (
+            row["num_green_potions"] - total_green_potions_bought
+        )
+        current_red_potions: int = row["num_red_potions"] - total_red_potions_bought
+        current_blue_potions: int = row["num_blue_potions"] - total_blue_potions_bought
+        current_gold: int = row["gold"] + total_gold_paid
 
         # Apply update
         conn.execute(
             sqlalchemy.text(
-                f"UPDATE global_inventory SET num_green_potions = {current_green_potions}, gold = {current_gold}"
+                f"UPDATE global_inventory SET gold = {current_gold}, num_green_potions = {current_green_potions}, num_red_potions = {current_red_potions}, num_blue_potions = {current_blue_potions}"
             )
         )
 
-    return result
+    return {
+        "total_potions_bought": total_potions_bought,
+        "total_gold_paid": total_gold_paid,
+    }

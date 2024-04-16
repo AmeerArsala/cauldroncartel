@@ -5,7 +5,6 @@ from src.api import auth
 
 import sqlalchemy
 from src import database as db
-from src.constants import create_pure_potion
 from src import constants as consts
 
 
@@ -26,7 +25,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     """ """
     with db.engine.begin() as conn:
         select_result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-        row = select_result[0]
+        row = select_result.first()
 
         current_red_potions = row["num_red_potions"]
         current_blue_potions = row["num_blue_potions"]
@@ -67,7 +66,7 @@ def get_bottle_plan():
 
     with db.engine.begin() as conn:
         select_result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-        row = select_result[0]
+        row = select_result.first()
 
         def convert_barrel_to_potions(
             num_current_ml: int, num_current_potions: int
