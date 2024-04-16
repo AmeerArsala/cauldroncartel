@@ -30,6 +30,8 @@ global_wholesale_catalog: list[Barrel] = []
 def purchase_barrels(barrels_delivered: list[Barrel]):
     # Deliver the barrels
     total_green_ml = 0
+    total_red_ml = 0
+    total_blue_ml = 0
     total_price = 0
     for barrel in barrels_delivered:
         green_proportion = barrel.potion_type[consts.GREEN] / 100.0
@@ -54,7 +56,7 @@ def purchase_barrels(barrels_delivered: list[Barrel]):
         # Update statement
         conn.execute(
             sqlalchemy.text(
-                f"UPDATE global_inventory SET num_green_potions = {current_green_potions}, num_green_ml = {remaining_green_ml}, gold = {current_gold}"
+                f"UPDATE global_inventory SET gold = {current_gold}, num_green_ml = {remaining_green_ml},"
             )
         )
 
@@ -91,14 +93,21 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     if row["num_green_potions"] < 10:
         # Purchase a new small green potion barrel
 
-        # Find the small green potion barrel
-        small_green_potion_barrel = None
-        for barrel in wholesale_catalog:
-            if barrel.sku == "SMALL_GREEN_BARREL":
-                small_green_potion_barrel = barrel
-                break
+        def find_barrel(barrel_name: str) -> Barrel:
+            for barrel in wholesale_catalog:
+                if barrel.sku == barrel_name:
+                    return barrel
 
-        barrels: list[Barrel] = [small_green_potion_barrel]
+        # Find the small potion barrels
+        small_green_potion_barrel: Barrel = find_barrel("SMALL_GREEN_BARREL")
+        small_red_potion_barrel: Barrel = find_barrel("SMALL_RED_BARREL")
+        small_blue_potion_barrel: Barrel = find_barrel("SMALL_BLUE_BARREL")
+
+        barrels: list[Barrel] = [
+            small_green_potion_barrel,
+            small_red_potion_barrel,
+            small_blue_potion_barrel,
+        ]
 
         # Purchase the barrel
         purchase_barrels(barrels)
@@ -108,7 +117,15 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     return [
         {
-            "sku": "SMALL_GREEN_BARREL",
-            "quantity": 1,
-        }
+            "sku": small_green_potion_barrel.sku,
+            "quantity": small_green_potion_barrel.sku,
+        },
+        {
+            "sku": small_red_potion_barrel.sku,
+            "quantity": small_red_potion_barrel.sku,
+        },
+        {
+            "sku": small_blue_potion_barrel.sku,
+            "quantity": small_blue_potion_barrel.sku,
+        },
     ]
