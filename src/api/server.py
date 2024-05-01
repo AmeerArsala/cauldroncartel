@@ -15,7 +15,7 @@ app = FastAPI(
     title="Cauldron Cartel",
     description=description,
     version="0.0.1",
-    terms_of_service="http://example.com/terms/",
+    terms_of_service="https://ran.anemo.ai",
     contact={
         "name": "Ameer Arsala",
         "email": "aarsala@calpoly.edu",
