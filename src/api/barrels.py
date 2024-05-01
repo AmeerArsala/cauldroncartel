@@ -23,6 +23,11 @@ class Barrel(BaseModel):
 
     quantity: int
 
+    def dummy():
+        return Barrel(
+            sku="NOTHING", ml_per_barrel=0, potion_type=[], price=0, quantity=0
+        )
+
 
 global_wholesale_catalog: list[Barrel] = []
 
@@ -42,7 +47,14 @@ def purchase_barrels(barrels_delivered: list[Barrel]):
 
         return ml
 
+    print(barrels_delivered)
     for barrel in barrels_delivered:
+        if barrel.quantity == 0:
+            print("NOTHING")
+            continue
+
+        print(barrel)
+
         total_green_ml += calculate_barrel_totals(barrel, consts.GREEN)
         total_red_ml += calculate_barrel_totals(barrel, consts.RED)
         total_blue_ml += calculate_barrel_totals(barrel, consts.BLUE)
@@ -68,11 +80,23 @@ def purchase_barrels(barrels_delivered: list[Barrel]):
         )
 
 
+# Given a list of barrels and an `order_id`, this function will actually deliver the barrels (update the db with the delivered barrels)
+# Assumes they have already been purchased
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
-
-    purchase_barrels(barrels_delivered)
+    # Since they've already been purchased, set their price to 0
+    purchased_barrels: list[Barrel] = [
+        Barrel(
+            sku=b.sku,
+            ml_per_barrel=b.ml_per_barrel,
+            potion_type=b.potion_type,
+            price=0,
+            quantity=b.quantity,
+        )
+        for b in barrels_delivered
+    ]
+    purchase_barrels(purchased_barrels)
 
     print(f"barrels delivered: {barrels_delivered} order_id: {order_id}")
 
@@ -80,6 +104,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 
 
 # Gets called once a day
+# Given a `wholesale_catalog` of barrels, the shop will purchase using this function once per day
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """
@@ -92,6 +117,16 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     global_wholesale_catalog = wholesale_catalog
     print(wholesale_catalog)
 
+    barrels: list[Barrel] = []
+
+    def find_barrel(barrel_name: str) -> Barrel:
+        for barrel in wholesale_catalog:
+            if barrel.sku == barrel_name:
+                return barrel
+
+        return Barrel.dummy()
+
+    # Get global_inventory table
     with db.engine.begin() as conn:
         result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
 
@@ -101,21 +136,20 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     if row["num_green_potions"] < 10:
         # Purchase a new small green potion barrel
 
-        def find_barrel(barrel_name: str) -> Barrel:
-            for barrel in wholesale_catalog:
-                if barrel.sku == barrel_name:
-                    return barrel
-
         # Find the small potion barrels
         small_green_potion_barrel: Barrel = find_barrel("SMALL_GREEN_BARREL")
         small_red_potion_barrel: Barrel = find_barrel("SMALL_RED_BARREL")
         small_blue_potion_barrel: Barrel = find_barrel("SMALL_BLUE_BARREL")
 
-        barrels: list[Barrel] = [
+        # Add the feasible ones to the list
+        potential_barrels: list[Barrel] = [
             small_green_potion_barrel,
             small_red_potion_barrel,
             small_blue_potion_barrel,
         ]
+        for potential_barrel in potential_barrels:
+            if potential_barrel.quantity > 0:
+                barrels.append(potential_barrel)
 
         # Purchase the barrel
         purchase_barrels(barrels)
@@ -123,17 +157,4 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     # Offer up for sale in the catalog only the amount of green potions that actually exist currently in inventory.
     # Done in `catalog.py`
 
-    return [
-        {
-            "sku": small_green_potion_barrel.sku,
-            "quantity": small_green_potion_barrel.sku,
-        },
-        {
-            "sku": small_red_potion_barrel.sku,
-            "quantity": small_red_potion_barrel.sku,
-        },
-        {
-            "sku": small_blue_potion_barrel.sku,
-            "quantity": small_blue_potion_barrel.sku,
-        },
-    ]
+    return [{"sku": barrel.sku, "quantity": barrel.quantity} for barrel in barrels]

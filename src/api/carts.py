@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from src.api import auth, catalog
 from enum import Enum
-import uuid
+import numpy as np
 
 import sqlalchemy
 from src import database as db
@@ -13,6 +13,8 @@ router = APIRouter(
     tags=["cart"],
     dependencies=[Depends(auth.get_api_key)],
 )
+
+MAX_CARTS = 100_000_000_000_000
 
 
 class search_sort_options(str, Enum):
@@ -28,14 +30,15 @@ class search_sort_order(str, Enum):
 
 
 class CartItem(BaseModel):
-    sku: str
+    sku: str = Field(default="")
     quantity: int
 
 
 class Cart(BaseModel):
-    cart_id: int = Field(default_factory=uuid.uuid4().int)
+    cart_id: int = Field(default_factory=lambda: np.random.randint(MAX_CARTS))
     cart_items: dict[str, CartItem] = Field(default={})
 
+    # If `name_starts_with` is left blank, it will just count all items
     def total_num_items(self, name_starts_with: str = "") -> int:
         num_items: int = 0
         for cart_item in self.cart_items.values():
@@ -59,6 +62,9 @@ class Cart(BaseModel):
             price += find_catalog_item(cart_item.sku)["price"] * cart_item.quantity
 
         return price
+
+    def as_str(self) -> str:
+        return {"cart_id": f"{self.cart_id:.0f}", "cart_items": self.cart_items}
 
 
 class Customer(BaseModel):
@@ -140,7 +146,7 @@ def create_cart(new_cart: Customer):
     cart: Cart = Cart()
     carts[cart.cart_id] = cart
 
-    return cart.dict()
+    return cart.dict()  # cart.as_str()
 
 
 @router.post("/{cart_id}/items/{item_sku}")
@@ -148,7 +154,10 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
     global carts
 
+    print(carts)
     cart: Cart = carts[cart_id]
+
+    # cart_item.sku = item_sku
 
     cart.cart_items[item_sku] = CartItem(sku=item_sku, quantity=cart_item.quantity)
 
