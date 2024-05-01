@@ -19,7 +19,7 @@ def get_catalog():
         with db.engine.begin() as conn:
             result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
 
-        row = result.first()
+        row = dict(db.wrap_result_as_global_inventory(result.first()))
 
         catalog = [
             {

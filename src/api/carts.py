@@ -173,7 +173,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
     with db.engine.begin() as conn:
         select_result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-        row = select_result.first()
+        row = dict(db.wrap_result_as_global_inventory(select_result.first()))
 
         # Calculate update
         current_green_potions: int = (

@@ -21,7 +21,7 @@ def get_inventory():
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
 
-    row = result.first()
+    row = dict(db.wrap_result_as_global_inventory(result.first()))
 
     return {
         "number_of_potions": row["num_green_potions"]
