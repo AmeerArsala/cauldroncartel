@@ -6,6 +6,9 @@ from src.api import auth
 import sqlalchemy
 from src import database as db
 from src import constants as consts
+from src.schemas.barrels import Barrels
+
+import numpy as np
 
 
 router = APIRouter(
@@ -65,41 +68,37 @@ def get_bottle_plan():
     # Latest logic: bottle all barrels into their respective red, blue, and green potions
 
     with db.engine.begin() as conn:
-        select_result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-        row = dict(db.wrap_result_as_global_inventory(select_result.first()))
+        # FIRST: get total resources of red, blue, green, dark
+        mult: str = "(ml_per_barrel * quantity)"
+        total_query = f"""
+            SELECT sku, red_percent * {mult}, blue_percent * {mult}, green_percent * {mult}, dark_percent * {mult}
+            FROM Barrels
+        """
 
-        def convert_barrel_to_potions(
-            num_current_ml: int, num_current_potions: int
-        ) -> tuple[int, int]:
-            num_current_ml_: int = num_current_ml
-            num_added_potions: int = int(num_current_ml_ / consts.ML_PER_BOTTLE)
+        results = conn.execute(sqlalchemy.text(total_query)).fetchall()
+        barrels_list: list[Barrels] = [
+            Barrels.wrap_result(result) for result in results
+        ]
 
-            num_current_ml_ -= num_added_potions * consts.ML_PER_BOTTLE
-            total_potions: int = num_current_potions + num_added_potions
-
-            return (num_current_ml_, total_potions)
-
-        (current_green_ml, current_green_potions) = convert_barrel_to_potions(
-            num_current_ml=row["num_green_ml"],
-            num_current_potions=row["num_green_potions"],
+        barrels_mls: np.ndarray = np.array(
+            [barrel_group.extract_ml() for barrel_group in barrels_list]
         )
+        total_mls: np.ndarray = barrels_mls.sum(axis=0)
 
-        (current_blue_ml, current_blue_potions) = convert_barrel_to_potions(
-            num_current_ml=row["num_blue_ml"],
-            num_current_potions=row["num_blue_potions"],
-        )
+        # TODO: SECOND: Algorithm to decide which Potions are made from this
 
-        (current_red_ml, current_red_potions) = convert_barrel_to_potions(
-            num_current_ml=row["num_red_ml"],
-            num_current_potions=row["num_red_potions"],
-        )
+        # TODO: THIRD: subtract ml from Inventory/Barrels, insert corresponding Potions
+
+        # TODO: FOURTH: Algorithm to decide which of these potions gets to go on the catalog
+
+        # TODO: FIFTH: insert corresponding CatalogPotionItems
 
         # Update the DB
-        conn.execute(
-            sqlalchemy.text(
-                f"UPDATE global_inventory SET num_green_potions = {current_green_potions}, num_green_ml = {current_green_ml}, num_blue_potions = {current_blue_potions}, num_blue_ml = {current_blue_ml}, num_red_potions = {current_red_potions}, num_red_ml = {current_red_ml}"
-            )
-        )
+        # conn.execute(
+        #     sqlalchemy.text(
+        #         f"UPDATE global_inventory SET num_green_potions = {current_green_potions}, num_green_ml = {current_green_ml}, num_blue_potions = {current_blue_potions}, num_blue_ml = {current_blue_ml}, num_red_potions = {current_red_potions}, num_red_ml = {current_red_ml}"
+        #     )
+        # )
 
     return [
         {
@@ -115,7 +114,3 @@ def get_bottle_plan():
             "quantity": current_blue_potions,
         },
     ]
-
-
-if __name__ == "__main__":
-    print(get_bottle_plan())

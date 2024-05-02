@@ -1,10 +1,10 @@
 - **admin.py** @ router("/admin")
   
-  - `reset()` @POST("/reset")
+  - ?`reset()` @POST("/reset")
 
 - **auth.py**
   
-  - `get_api_key(request: Request, api_key_header: str = Security(api_key_header))`
+  - ?`get_api_key(request: Request, api_key_header: str = Security(api_key_header))`
 
 - **barrels.py** @ router("/barrels")
   
@@ -12,17 +12,17 @@
   
   - `post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int)` @POST("/deliver/{order_id}")
   
-  - `get_wholesale_purchase_plan(wholesale_catalog: list[Barrel])` @POST("/plan")
+  - `get_wholesale_purchase_plan(wholesale_catalog: list[Barrel])` **@POST("/plan")**
   
-  - NOTE: Barrel Conveyor Belt
+  - <u>NOTE: Barrel Conveyor Belt</u>
 
 - **bottler.py** @ router("/bottler")
   
   - `post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int)` @POST("/deliver/{order_id})
   
-  - `get_bottle_plan()` @POST("/plan")
+  - `get_bottle_plan()` **@POST("/plan")**
   
-  - NOTE: Bottle Conveyor Belt
+  - <u>NOTE: Bottle Conveyor Belt</u>
 
 - **carts.py** @ router("/carts")
   
@@ -30,18 +30,18 @@
   
   - `post_visits(visit_id: int, customers: list[Customer])` @POST("/visits/{visit_id}")
   
-  - `create_cart(new_cart: Customer)` @POST("/")
+  - @`create_cart(new_cart: Customer)` @POST("/")
   
-  - `set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem)` @POST("/{cart_id}/items/{item_sku}")
+  - @`set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem)` @POST("/{cart_id}/items/{item_sku}")
   
   - `checkout(cart_id: int, cart_checkout: CartCheckout)` @POST("/{cart_id}/checkout")
   
-  - NOTE: customer checkout
+  - <u>NOTE: customer checkout</u>
 
 - **catalog.py**
   
-  - `get_catalog()` @GET("/catalog/")
-  - NOTE: available items to sell 
+  - @`get_catalog()` @GET("/catalog/")
+  - <u>NOTE: available items to sell</u>
 
 - **info.py**
   
@@ -49,13 +49,13 @@
 
 - **inventory.py** @ router("/inventory")
   
-  - `get_inventory()` @GET("/audit")
+  - @`get_inventory()` @GET("/audit")
   
-  - `get_capacity_plan()` @POST("/plan")
+  - @`get_capacity_plan()` **@POST("/plan")**
   
   - `deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int)` @POST("/deliver/{order_id}")
   
-  - NOTE: Capacity/Inventory Upgrades Conveyor Belt
+  - <u>NOTE: Capacity/Inventory Upgrades Conveyor Belt</u>
 
 # Action Steps
 

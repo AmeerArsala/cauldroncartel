@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from src.api import auth
-import math
 
 import sqlalchemy
 from src import database as db
+from src.schemas.inventory import Inventory
 
 
 router = APIRouter(
@@ -17,18 +17,12 @@ router = APIRouter(
 @router.get("/audit")
 def get_inventory():
     """ """
-
-    with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-
-    row = dict(db.wrap_result_as_global_inventory(result.first()))
+    row: Inventory = db.retrieve_inventory()
 
     return {
-        "number_of_potions": row["num_green_potions"]
-        + row["num_red_potions"]
-        + row["num_blue_potions"],
-        "ml_in_barrels": row["num_green_ml"] + row["num_red_ml"] + row["num_blue_ml"],
-        "gold": row["gold"],
+        "number_of_potions": row.num_potions,
+        "ml_in_barrels": row.red_ml + row.blue_ml + row.green_ml + row.dark_ml,
+        "gold": row.gold,
     }
 
 
@@ -40,7 +34,9 @@ def get_capacity_plan():
     capacity unit costs 1000 gold.
     """
 
-    return {"potion_capacity": 1, "ml_capacity": 1}
+    row: Inventory = db.retrieve_inventory()
+
+    return {"potion_capacity": row.potion_capacity, "ml_capacity": row.ml_capacity}
 
 
 class CapacityPurchase(BaseModel):
@@ -49,6 +45,7 @@ class CapacityPurchase(BaseModel):
 
 
 # Gets called once a day
+# The daily action plan!!!
 @router.post("/deliver/{order_id}")
 def deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int):
     """
