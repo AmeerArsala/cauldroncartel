@@ -4,7 +4,7 @@
 
 - **auth.py**
   
-  - ?`get_api_key(request: Request, api_key_header: str = Security(api_key_header))`
+  - @`get_api_key(request: Request, api_key_header: str = Security(api_key_header))`
 
 - **barrels.py** @ router("/barrels")
   
@@ -57,12 +57,16 @@
   
   - <u>NOTE: Capacity/Inventory Upgrades Conveyor Belt</u>
 
-# Action Steps
+# TODO
 
-1. ~~From Jupyter Notebook, check row[0], 1, ..., etc. for the correct column values~~
+1. On Insert Potion, check to see if it already exists. If so, just add another one. In general, deal with quantities
 
-2. ~~Translate that into code~~
+2. Ledgers
 
-3. ~~Scan this doc for what is needed for arbitrary number of potions~~
+3. Search Bar
 
-4. ~~Turn that into a DB and update the codebase accordingly~~
+4. `post_time`
+
+5. `reset`
+
+6. Update this doc

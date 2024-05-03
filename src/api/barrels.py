@@ -85,9 +85,12 @@ def deliver_barrels(
                 for barrel_schema in barrel_schemas_delivered
             ]
         )
+
+        print(barrel_values_tuples)
+
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO Barrels({barrel_cols}) VALUES {barrel_values_tuples}"
+                f"INSERT INTO barrels({barrel_cols}) VALUES {barrel_values_tuples}"
             )
         )
 
@@ -100,7 +103,7 @@ def deliver_barrels(
 
         # Update Inventory's stats
         update_query: str = f"""
-            UPDATE Inventory 
+            UPDATE inventory 
             SET red_ml = red_ml + {total_mls_added[consts.RED]}, blue_ml = blue_ml + {total_mls_added[consts.BLUE]}, green_ml = green_ml + {total_mls_added[consts.GREEN]}, dark_ml = dark_ml + {total_mls_added[consts.DARK]} 
         """
 
@@ -131,14 +134,14 @@ def deliver_barrels(
                 order_name: str = barrels_delivered[i].sku
                 price: int = total_prices[i]
 
-                order_tuple_values += f"({order_id}, {price}, {order_name}), "
+                order_tuple_values += f"({order_id}, {price}, '{order_name}'), "
 
             # remove the last ", "
             order_tuple_values = order_tuple_values[:-2]
 
             conn.execute(
                 sqlalchemy.text(
-                    f"INSERT INTO Orders(order_id, price, order_name) VALUES {order_tuple_values}"
+                    f"INSERT INTO orders(order_id, price, order_name) VALUES {order_tuple_values}"
                 )
             )
 
@@ -178,7 +181,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     hold_out_percent: float = 0.2
     budget: int = inventory_row.gold * (1.0 - hold_out_percent)
 
-    def can_purchase(barrels: list[Barrel]) -> bool:
+    def can_purchase(barrels: list[Barrel], budget: int) -> bool:
         for barrel in barrels:
             if budget >= barrel.price:
                 return True
@@ -190,7 +193,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     policy = lambda: ([1] * catalog_len)
     if inventory_row.num_potions < 10:
         # Purchase as many barrels as it can afford
-        def restock(barrels: list[Barrel]) -> list[int]:
+        def restock(barrels: list[Barrel], budget: int = budget) -> list[int]:
             # Choose the barrels that maximize the # of purchases
             # Do it by finding the lowest prices and going from there but also having a diversity score
 
@@ -203,7 +206,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
             MAX_PRICE = 9999999999
 
-            while can_purchase(barrels):
+            while can_purchase(barrels, budget):
                 # Roll random chance
                 randomize_idx: bool = np.random.choice(
                     [True, False], p=[random_idx_chance, standard_chance]
@@ -238,7 +241,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         policy = restock
     else:
         # Purchase the most expensive one that can be afforded
-        def aristocratic(barrels: list[Barrel]) -> list[int]:
+        def aristocratic(barrels: list[Barrel], budget: int = budget) -> list[int]:
             purchases: list[int] = [0] * catalog_len
 
             random_idx_chance: float = 0.25
@@ -248,7 +251,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
             MIN_PRICE = 0
 
-            while can_purchase(barrels):
+            while can_purchase(barrels, budget):
                 # Roll random chance
                 randomize_idx: bool = np.random.choice(
                     [True, False], p=[random_idx_chance, standard_chance]

@@ -5,7 +5,7 @@ from enum import Enum
 
 import sqlalchemy
 from src import database as db
-from src.schemas.carts import Cart, CartItem
+from src.schemas.carts import Cart  # CartItem
 
 
 router = APIRouter(
@@ -145,12 +145,12 @@ def post_visits(visit_id: int, customers: list[Customer]):
         conn.execute(
             sqlalchemy.text(
                 f"""
-            INSERT INTO Customers(name, character_class, level)
+            INSERT INTO customers(name, character_class, level)
             SELECT name, character_class, level
             FROM (VALUES {values_str}) AS T(name, character_class, level)
             WHERE NOT EXISTS (
                 SELECT 1
-                FROM Customers
+                FROM customers
                 WHERE name = T.name
             )
         """
@@ -165,21 +165,26 @@ def create_cart(new_cart: Customer):
     """ """
     with db.engine.begin() as conn:
         id_query: str = (
-            f"SELECT id FROM Customers WHERE name = {new_cart.customer_name} AND character_class = {new_cart.character_class} AND level = {new_cart.level}"
+            f"SELECT id FROM customers WHERE name = '{new_cart.customer_name}' AND character_class = '{new_cart.character_class}' AND level = {new_cart.level}"
         )
 
         customer_id = conn.execute(sqlalchemy.text(id_query)).first()
 
-        if len(customer_id) == 0:
+        if customer_id is None or len(customer_id) == 0:  # it doesn't exist
+            # print(err)
+
             # Make a new customer
             conn.execute(
                 sqlalchemy.text(
-                    f"INSERT INTO Customers(name, character_class, level) VALUES ({new_cart.customer_name}, {new_cart.character_class}, {new_cart.level})"
+                    f"INSERT INTO customers(name, character_class, level) VALUES ('{new_cart.customer_name}', '{new_cart.character_class}', {new_cart.level})"
                 )
             )
 
+            # redo the customer_id
+            customer_id = conn.execute(sqlalchemy.text(id_query)).first()[0]
+
         conn.execute(
-            sqlalchemy.text(f"INSERT INTO Carts(customer_id) VALUES ({id_query})")
+            sqlalchemy.text(f"INSERT INTO carts(customer_id) VALUES ({customer_id})")
         )
 
     return "OK"
@@ -190,22 +195,22 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
     with db.engine.begin() as conn:
         find_query: str = (
-            f"SELECT * FROM CartItems WHERE cart_id = {cart_id} AND sku = {item_sku}"
+            f"SELECT * FROM cartitems WHERE cart_id = {cart_id} AND sku = '{item_sku}'"
         )
         find_result = conn.execute(sqlalchemy.text(find_query)).first()
 
-        if len(find_result) == 0:  # empty
+        if find_result is None or len(find_result) == 0:  # empty
             # Add a new one
             conn.execute(
                 sqlalchemy.text(
-                    f"INSERT INTO CartItems(sku, cart_id, quantity) VALUES ({item_sku}, {cart_id}, {cart_item.quantity})"
+                    f"INSERT INTO cartitems(sku, cart_id, quantity) VALUES ('{item_sku}', {cart_id}, {cart_item.quantity})"
                 )
             )
         else:
             # Update the old one's quantity
             conn.execute(
                 sqlalchemy.text(
-                    f"UPDATE CartItems SET quantity = {cart_item.quantity} WHERE cart_id = {cart_id} AND sku = {item_sku}"
+                    f"UPDATE cartitems SET quantity = {cart_item.quantity} WHERE cart_id = {cart_id} AND sku = '{item_sku}'"
                 )
             )
 
@@ -219,9 +224,9 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         select_result = conn.execute(
             sqlalchemy.text(
                 f"""
-            SELECT SUM(CartItems.quantity), SUM(CartItems.quantity * CatalogPotionItems.price)
-            FROM CartItems INNER JOIN CatalogPotionItems ON CartItems.sku = CatalogPotionItems.sku
-            WHERE CartItems.cart_id = {cart_id}
+            SELECT SUM(cartitems.quantity), SUM(cartitems.quantity * catalogpotionitems.price)
+            FROM cartitems INNER JOIN catalogpotionitems ON cartitems.sku = catalogpotionitems.sku
+            WHERE cartitems.cart_id = {cart_id}
             """
             )
         )
@@ -231,17 +236,36 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         # Apply difference in potion items from cart
         # Update inventory gold
         update_query = f"""
-            UPDATE (CartItems INNER JOIN CatalogPotionItems ON CartItems.sku = CatalogPotionItems.sku)
-            INNER JOIN Potions ON CatalogPotionItems.sku = Potions.sku
-            INNER JOIN Inventory ON Potions.inventory_id = Inventory.id
-            SET CatalogPotionItems.quantity = CatalogPotionItems.quantity - CartItems.quantity, Potions.quantity = Potions.quantity - CartItems.quantity, Inventory.gold = Inventory.gold + {total_gold_paid}, Inventory.num_potions = Inventory.num_potions + {total_gold_paid}
-            WHERE CartItems.cart_id = {cart_id}
+            WITH update_one AS (
+                UPDATE catalogpotionitems
+                SET quantity = catalogpotionitems.quantity - cartitems.quantity
+                FROM cartitems
+                WHERE cartitems.sku = catalogpotionitems.sku
+            ),
+            update_two AS (
+                UPDATE potions
+                SET quantity = potions.quantity - cartitems.quantity
+                FROM cartitems
+                WHERE potions.sku = cartitems.sku
+            )
+            UPDATE inventory
+            SET gold = gold + {total_gold_paid}, num_potions = num_potions + {total_gold_paid}
         """
+
+        f"""
+        UPDATE cartitems 
+        INNER JOIN catalogpotionitems ON cartitems.sku = catalogpotionitems.sku
+        INNER JOIN potions ON catalogpotionitems.sku = potions.sku
+        INNER JOIN inventory ON potions.inventory_id = inventory.id
+        SET catalogpotionitems.quantity = catalogpotionitems.quantity - cartitems.quantity, potions.quantity = potions.quantity - cartitems.quantity, inventory.gold = inventory.gold + {total_gold_paid}, inventory.num_potions = inventory.num_potions + {total_gold_paid}
+        WHERE cartitems.cart_id = {cart_id}
+        """
+
         conn.execute(sqlalchemy.text(update_query))
 
         # Empty cart items
         conn.execute(
-            sqlalchemy.text(f"DELETE FROM CartItems WHERE cart_id = {cart_id}")
+            sqlalchemy.text(f"DELETE FROM cartitems WHERE cart_id = {cart_id}")
         )
 
     return {

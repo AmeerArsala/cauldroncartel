@@ -35,8 +35,8 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
         potions_tuple_query: str = ""
         num_added_potions: int = 0
         for potion in potions:
-            orders_tuple_query += f"({order_id}, {potion.sku}), "
-            potions_tuple_query += f"({potion.sku}, {potion.red_percent}, {potion.blue_percent}, {potion.green_percent}, {potion.dark_percent}, {potion.quantity}, {consts.INVENTORY_ID}), "
+            orders_tuple_query += f"({order_id}, '{potion.sku}'), "
+            potions_tuple_query += f"('{potion.sku}', {potion.red_percent}, {potion.blue_percent}, {potion.green_percent}, {potion.dark_percent}, {potion.quantity}, {consts.INVENTORY_ID}), "
 
             num_added_potions += potion.quantity
 
@@ -49,7 +49,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 
         selling_potions_tuple_query: str = ""
         for potion in selling_potions:
-            selling_potions_tuple_query += f"({potion.sku}, {potion_selling.name_potion(potion)}, {potion.quantity}, {potion_selling.price_potion(potion)}), "
+            selling_potions_tuple_query += f"('{potion.sku}', '{potion_selling.name_potion(potion)}', {potion.quantity}, {potion_selling.price_potion(potion)}), "
 
         # remove the ", "
         selling_potions_tuple_query = selling_potions_tuple_query[:-2]
@@ -57,28 +57,31 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
         # Add an order
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO Orders(order_id, order_name) VALUES {orders_tuple_query}"
+                f"INSERT INTO orders(order_id, order_name) VALUES {orders_tuple_query}"
             )
         )
+
+        # Check if any already exist
+        # result = conn.execute(sqlalchemy.text("SELECT * FROM potions WHERE "))
 
         # Add potions to Potions
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO Potions(sku, red_percent, blue_percent, green_percent, dark_percent, quantity, inventory_id) VALUES {potions_tuple_query}"
+                f"INSERT INTO potions(sku, red_percent, blue_percent, green_percent, dark_percent, quantity, inventory_id) VALUES {potions_tuple_query}"
             )
         )
 
         # Add corresponding CatalogPotionItems
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO CatalogPotionItems(sku, name, quantity, price) VALUES {selling_potions_tuple_query}"
+                f"INSERT INTO catalogpotionitems(sku, name, quantity, price) VALUES {selling_potions_tuple_query}"
             )
         )
 
         # Add Potions to Inventory
         conn.execute(
             sqlalchemy.text(
-                f"UPDATE Inventory SET num_potions = num_potions + {num_added_potions} WHERE id = {consts.INVENTORY_ID}"
+                f"UPDATE inventory SET num_potions = num_potions + {num_added_potions} WHERE id = {consts.INVENTORY_ID}"
             )
         )
 
@@ -92,7 +95,6 @@ def get_bottle_plan():
     """
     Go from barrel to bottle.
     """
-
     # Each bottle has a quantity of what proportion of red, blue, and
     # green potion to add.
     # Expressed in integers from 1 to 100 that must sum up to 100.
@@ -106,7 +108,7 @@ def get_bottle_plan():
         mult: str = "(ml_per_barrel * quantity / 100.0)"
         total_query = f"""
             SELECT sku, red_percent * {mult}, blue_percent * {mult}, green_percent * {mult}, dark_percent * {mult}
-            FROM Barrels
+            FROM barrels
         """
 
         results = conn.execute(sqlalchemy.text(total_query)).fetchall()
@@ -135,7 +137,7 @@ def get_bottle_plan():
         # Aggregate the results into a str
         new_barrels_tuple_query: str = ""
         for new_barrel in new_barrel_set:
-            new_barrels_tuple_query += f"({new_barrel.sku}, {new_barrel.red_percent}, {new_barrel.blue_percent}, {new_barrel.green_percent}, {new_barrel.dark_percent}, {new_barrel.ml_per_barrel}, {new_barrel.quantity}, {new_barrel.inventory_id}), "
+            new_barrels_tuple_query += f"('{new_barrel.sku}', {new_barrel.red_percent}, {new_barrel.blue_percent}, {new_barrel.green_percent}, {new_barrel.dark_percent}, {new_barrel.ml_per_barrel}, {new_barrel.quantity}, {new_barrel.inventory_id}), "
 
         # remove the last ", "
         new_barrels_tuple_query = new_barrels_tuple_query[:-2]
@@ -143,12 +145,12 @@ def get_bottle_plan():
         # Delete all barrels and insert these instead
         conn.execute(
             sqlalchemy.text(
-                f"DELETE FROM Barrels WHERE inventory_id = {consts.INVENTORY_ID}"
+                f"DELETE FROM barrels WHERE inventory_id = {consts.INVENTORY_ID}"
             )
         )
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO Barrels(sku, red_percent, blue_percent, green_percent, dark_percent, ml_per_barrel, quantity, inventory_id) VALUES {new_barrels_tuple_query}"
+                f"INSERT INTO barrels(sku, red_percent, blue_percent, green_percent, dark_percent, ml_per_barrel, quantity, inventory_id) VALUES {new_barrels_tuple_query}"
             )
         )
 
@@ -156,7 +158,7 @@ def get_bottle_plan():
         potions_tuple_query: str = ""
         num_added_potions: int = 0
         for potion in made_potions:
-            potions_tuple_query += f"({potion.sku}, {potion.red_percent}, {potion.blue_percent}, {potion.green_percent}, {potion.dark_percent}, {potion.quantity}, {consts.INVENTORY_ID}), "
+            potions_tuple_query += f"('{potion.sku}', {potion.red_percent}, {potion.blue_percent}, {potion.green_percent}, {potion.dark_percent}, {potion.quantity}, {consts.INVENTORY_ID}), "
 
             num_added_potions += potion.quantity
 
@@ -168,7 +170,7 @@ def get_bottle_plan():
 
         selling_potions_tuple_query: str = ""
         for potion in selling_potions:
-            selling_potions_tuple_query += f"({potion.sku}, {potion_selling.name_potion(potion)}, {potion.quantity}, {potion_selling.price_potion(potion)}), "
+            selling_potions_tuple_query += f"('{potion.sku}', '{potion_selling.name_potion(potion)}', {potion.quantity}, {potion_selling.price_potion(potion)}), "
 
         # remove the ", "
         selling_potions_tuple_query = selling_potions_tuple_query[:-2]
@@ -176,14 +178,14 @@ def get_bottle_plan():
         # Add Potions
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO Potions(sku, red_percent, blue_percent, green_percent, dark_percent, quantity, inventory_id) VALUES {potions_tuple_query}"
+                f"INSERT INTO potions(sku, red_percent, blue_percent, green_percent, dark_percent, quantity, inventory_id) VALUES {potions_tuple_query}"
             )
         )
 
         # Add corresponding CatalogPotionItems
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO CatalogPotionItems(sku, name, quantity, price) VALUES {selling_potions_tuple_query}"
+                f"INSERT INTO catalogpotionitems(sku, name, quantity, price) VALUES {selling_potions_tuple_query}"
             )
         )
 
@@ -191,7 +193,7 @@ def get_bottle_plan():
         conn.execute(
             sqlalchemy.text(
                 f"""
-                    UPDATE Inventory
+                    UPDATE inventory
                     SET num_potions = num_potions + {num_added_potions}, red_ml = {new_total_mls[consts.RED]}, blue_ml = {new_total_mls[consts.BLUE]}, green_ml = {new_total_mls[consts.GREEN]}, dark_ml = {new_total_mls[consts.DARK]} 
                     WHERE id = {consts.INVENTORY_ID}
                 """

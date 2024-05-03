@@ -19,10 +19,21 @@ def retrieve_inventory() -> Inventory:
     global engine
 
     with engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM Inventory"))
+        result = connection.execute(sqlalchemy.text("SELECT * FROM inventory"))
 
     row: Inventory = Inventory.wrap_result(result.first())
 
     consts.INVENTORY_ID = row.id_
 
     return row
+
+
+# with engine.begin() as connection:
+#     results = connection.execute(
+#         sqlalchemy.text(
+#             "SELECT * FROM inventory"
+#             # "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+#         )
+#     )
+#     print("printing result...")
+#     print(results.fetchall())

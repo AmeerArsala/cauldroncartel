@@ -9,17 +9,28 @@ class Schema(BaseModel, abc.ABC):
 
         keys_str: str = f"{keys[0]}"
         for key in keys[1:]:
-            keys += f", {key}"
+            keys_str += f", {key}"
 
         return keys_str
 
     def as_tuple_value_str(self) -> str:
         obj_dict: dict = self.dict()
+        keys: list[str] = list(obj_dict.keys())
         vals = list(obj_dict.values())
 
-        tuple_str: str = f"{vals[0]}"
+        # for exclude_key in exclude_keys:
+        #     if exclude_key in keys:
+        #         rm_idx = keys.index(exclude_key)
+        #         keys.pop(rm_idx)
+        #         vals.pop(rm_idx)
+
+        val_0 = vals[0]
+        tuple_str: str = f"'{val_0}'" if type(val_0) is str else f"{val_0}"
         for val in vals[1:]:
-            tuple_str += f", {val}"
+            if type(val) is str:
+                tuple_str += f", '{val}'"
+            else:
+                tuple_str += f", {val}"
 
         return f"({tuple_str})"
 

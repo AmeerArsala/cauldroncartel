@@ -43,12 +43,14 @@ def purchase_capacity(capacity_purchase: CapacityPurchase):
         conn.execute(
             sqlalchemy.text(
                 f"""
-                UPDATE Inventory
+                UPDATE inventory
                 SET potion_capacity = potion_capacity + {capacity_purchase.potion_capacity}, ml_capacity = ml_capacity + {capacity_purchase.ml_capacity}, gold = gold - {gold_spent}
                 WHERE id = {consts.INVENTORY_ID}
                 """
             )
         )
+
+        # conn.execute(sqlalchemy.text(f"INSERT INTO capacitypurchases(id) VALUES ('{str()}')"))
 
 
 # Gets called once a day
@@ -117,7 +119,7 @@ def deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int):
 
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO Orders(order_id, order_name, price) VALUES ({order_id}, {order_name}, {price})"
+                f"INSERT INTO orders(order_id, order_name, price) VALUES ({order_id}, '{order_name}', {price})"
             )
         )
 

@@ -50,7 +50,6 @@ def generate_potions(potions_inventory: list[PotionInventory]) -> list[Potion]:
     return potion_list
 
 
-# TODO: do this!!!
 # Returns: tuple[made_potions, used_up_mls]
 # NOTE: SUPER KEY ALGORITHM
 # total_mls = np.array([red, blue, green, dark])
@@ -77,10 +76,10 @@ def make_potions_from_mls(total_mls: np.ndarray) -> tuple[list[Potion], np.ndarr
         random_scores = np.random.rand(NUM_COLORS) * commission_states
 
         # Normalize them
-        random_probabilities = random_scores / random_scores.sum()
-        random_percentages = random_probabilities * 100
+        random_probabilities = (random_scores / random_scores.sum()).round(2)
+        random_percentages = (random_probabilities * 100).astype(int)
 
-        mls_used = random_probabilities * consts.ML_PER_BOTTLE
+        mls_used = (random_probabilities * consts.ML_PER_BOTTLE).astype(int)
 
         # def relu(x: np.ndarray):
         #     return x * (x > 0)
@@ -93,6 +92,7 @@ def make_potions_from_mls(total_mls: np.ndarray) -> tuple[list[Potion], np.ndarr
                 blue_percent=random_percentages[consts.BLUE],
                 green_percent=random_percentages[consts.GREEN],
                 dark_percent=random_percentages[consts.DARK],
+                quantity=1,
             )
         )
 
