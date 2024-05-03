@@ -14,6 +14,9 @@ class Inventory(Schema):
     ml_capacity: int
     gold: int
 
+    def calculate_total_mls(self):
+        return self.red_ml + self.blue_ml + self.green_ml + self.dark_ml
+
     def wrap_result(row: tuple):
         return wrap_result_with_schema(row, Inventory)
 

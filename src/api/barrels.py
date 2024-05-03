@@ -6,6 +6,12 @@ import sqlalchemy
 from src import database as db
 from src import constants as consts
 
+from src.schemas.barrels import BarrelSchema
+from src.schemas.inventory import Inventory
+from src.lib import barreling
+
+import numpy as np
+
 
 router = APIRouter(
     prefix="/barrels",
@@ -23,61 +29,118 @@ class Barrel(BaseModel):
 
     quantity: int
 
+    def calculate_total_mls(self) -> np.ndarray:
+        potion_proportions = np.array(self.potion_type) / 100.0
+
+        return potion_proportions * self.ml_per_barrel * self.quantity
+
+    def calculate_total_price(self) -> int:
+        return self.price * self.quantity
+
+    def to_barrel_schema(self) -> BarrelSchema:
+        return BarrelSchema(
+            sku=self.sku,
+            red_percent=self.potion_type[consts.RED],
+            blue_percent=self.potion_type[consts.BLUE],
+            green_percent=self.potion_type[consts.GREEN],
+            dark_percent=self.potion_type[consts.DARK],
+            ml_per_barrel=self.ml_per_barrel,
+            quantity=self.quantity,
+        )
+
+    def with_quantity(self, quantity: int):
+        return Barrel(
+            sku=self.sku,
+            ml_per_barrel=self.ml_per_barrel,
+            potion_type=self.potion_type,
+            price=self.price,
+            quantity=quantity,
+        )
+
     def dummy():
         return Barrel(
             sku="NOTHING", ml_per_barrel=0, potion_type=[], price=0, quantity=0
         )
 
 
-global_wholesale_catalog: list[Barrel] = []
+def deliver_barrels(
+    barrels_delivered: list[Barrel], is_purchase: bool = False, order_id=None
+):
+    barrel_schemas_delivered: list[BarrelSchema] = [
+        barrel.to_barrel_schema() for barrel in barrels_delivered
+    ]
 
+    # Purchase will add an order + subtract gold from inventory
 
-def purchase_barrels(barrels_delivered: list[Barrel]):
-    # Deliver the barrels
-    total_green_ml = 0
-    total_red_ml = 0
-    total_blue_ml = 0
+    # Otherwise, to deliver, here are the steps:
+    # Insert the barrels into Barrels
+    # Update Inventory's stats
 
-    total_price = 0
-
-    # Calculate totals
-    def calculate_barrel_totals(barrel: Barrel, potion_type: int):
-        proportion = barrel.potion_type[potion_type] / 100.0
-        ml = proportion * barrel.ml_per_barrel * barrel.quantity
-
-        return ml
-
-    print(barrels_delivered)
-    for barrel in barrels_delivered:
-        if barrel.quantity == 0:
-            print("NOTHING")
-            continue
-
-        print(barrel)
-
-        total_green_ml += calculate_barrel_totals(barrel, consts.GREEN)
-        total_red_ml += calculate_barrel_totals(barrel, consts.RED)
-        total_blue_ml += calculate_barrel_totals(barrel, consts.BLUE)
-
-        total_price += barrel.price * barrel.quantity
-
-    # Update the DB by diminishing gold and increasing ml (barrels)
     with db.engine.begin() as conn:
-        select_result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-        row = dict(db.wrap_result_as_global_inventory(select_result.first()))
-
-        current_green_ml = row["num_green_ml"] + total_green_ml
-        current_red_ml = row["num_red_ml"] + total_red_ml
-        current_blue_ml = row["num_blue_ml"] + total_blue_ml
-
-        current_gold = row["gold"] - total_price
-
-        # Update statement
+        # Insert the barrels into Barrels
+        barrel_cols: str = barrel_schemas_delivered[0].keys_as_str()
+        barrel_values_tuples: str = ",".join(
+            [
+                barrel_schema.as_tuple_value_str()
+                for barrel_schema in barrel_schemas_delivered
+            ]
+        )
         conn.execute(
             sqlalchemy.text(
-                f"UPDATE global_inventory SET gold = {current_gold}, num_green_ml = {current_green_ml}, num_red_ml = {current_red_ml}, num_blue_ml = {current_blue_ml}"
+                f"INSERT INTO Barrels({barrel_cols}) VALUES {barrel_values_tuples}"
             )
         )
+
+        # Get the stats of what just happened
+        # Row-wise total mls
+        total_mls_added_by_row = np.array(
+            [barrel.calculate_total_mls() for barrel in barrels_delivered]
+        )
+        total_mls_added: np.ndarray = total_mls_added_by_row.sum(axis=0)
+
+        # Update Inventory's stats
+        update_query: str = f"""
+            UPDATE Inventory 
+            SET red_ml = red_ml + {total_mls_added[consts.RED]}, blue_ml = blue_ml + {total_mls_added[consts.BLUE]}, green_ml = green_ml + {total_mls_added[consts.GREEN]}, dark_ml = dark_ml + {total_mls_added[consts.DARK]} 
+        """
+
+        total_prices = [0] * len(barrels_delivered)
+        total_price: int = 0
+        if is_purchase:
+            # If purchase, add gold removing to the query
+            total_prices = np.array(
+                [barrel.calculate_total_price() for barrel in barrels_delivered]
+            )
+            total_price = total_prices.sum()
+
+            update_query += f", gold = gold - {total_price}"
+
+        conn.execute(
+            sqlalchemy.text(
+                f"""
+            {update_query}
+            WHERE id = {consts.INVENTORY_ID}
+            """
+            )
+        )
+
+        # Now, add an order (if one is supplied)
+        if order_id is not None:
+            order_tuple_values: str = ""
+            for i in range(len(barrels_delivered)):
+                order_name: str = barrels_delivered[i].sku
+                price: int = total_prices[i]
+
+                order_tuple_values += f"({order_id}, {price}, {order_name}), "
+
+            # remove the last ", "
+            order_tuple_values = order_tuple_values[:-2]
+
+            conn.execute(
+                sqlalchemy.text(
+                    f"INSERT INTO Orders(order_id, price, order_name) VALUES {order_tuple_values}"
+                )
+            )
 
 
 # Given a list of barrels and an `order_id`, this function will actually deliver the barrels (update the db with the delivered barrels)
@@ -86,17 +149,7 @@ def purchase_barrels(barrels_delivered: list[Barrel]):
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
     # Since they've already been purchased, set their price to 0
-    purchased_barrels: list[Barrel] = [
-        Barrel(
-            sku=b.sku,
-            ml_per_barrel=b.ml_per_barrel,
-            potion_type=b.potion_type,
-            price=0,
-            quantity=b.quantity,
-        )
-        for b in barrels_delivered
-    ]
-    purchase_barrels(purchased_barrels)
+    deliver_barrels(barrels_delivered, is_purchase=False, order_id=order_id)
 
     print(f"barrels delivered: {barrels_delivered} order_id: {order_id}")
 
@@ -105,6 +158,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 
 # Gets called once a day
 # Given a `wholesale_catalog` of barrels, the shop will purchase using this function once per day
+# NOTE: SUPER KEY ALGORITHM
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """
@@ -112,49 +166,129 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     Always mix all available green ml if any exists.
     Offer up for sale in the catalog only the amount of green potions that actually exist currently in inventory.
     """
-    global global_wholesale_catalog
-
-    global_wholesale_catalog = wholesale_catalog
-    print(wholesale_catalog)
 
     barrels: list[Barrel] = []
 
-    def find_barrel(barrel_name: str) -> Barrel:
-        for barrel in wholesale_catalog:
-            if barrel.sku == barrel_name:
-                return barrel
+    catalog_len: int = len(wholesale_catalog)
 
-        return Barrel.dummy()
+    # Only one row for inventory
+    inventory_row: Inventory = db.retrieve_inventory()
 
-    # Get global_inventory table
-    with db.engine.begin() as conn:
-        result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
+    # Hold out some funds for Inventory upgrades
+    hold_out_percent: float = 0.2
+    budget: int = inventory_row.gold * (1.0 - hold_out_percent)
 
-    # Only one row rn
-    row = dict(db.wrap_result_as_global_inventory(result.first()))
+    def can_purchase(barrels: list[Barrel]) -> bool:
+        for barrel in barrels:
+            if budget >= barrel.price:
+                return True
 
-    if row["num_green_potions"] < 10:
-        # Purchase a new small green potion barrel
+        return False
 
-        # Find the small potion barrels
-        small_green_potion_barrel: Barrel = find_barrel("SMALL_GREEN_BARREL")
-        small_red_potion_barrel: Barrel = find_barrel("SMALL_RED_BARREL")
-        small_blue_potion_barrel: Barrel = find_barrel("SMALL_BLUE_BARREL")
+    # Decide strategy
+    # policy returns a quantity to purchase at each index
+    policy = lambda: ([1] * catalog_len)
+    if inventory_row.num_potions < 10:
+        # Purchase as many barrels as it can afford
+        def restock(barrels: list[Barrel]) -> list[int]:
+            # Choose the barrels that maximize the # of purchases
+            # Do it by finding the lowest prices and going from there but also having a diversity score
 
-        # Add the feasible ones to the list
-        potential_barrels: list[Barrel] = [
-            small_green_potion_barrel,
-            small_red_potion_barrel,
-            small_blue_potion_barrel,
-        ]
-        for potential_barrel in potential_barrels:
-            if potential_barrel.quantity > 0:
-                barrels.append(potential_barrel)
+            purchases: list[int] = [0] * catalog_len
 
-        # Purchase the barrel
-        purchase_barrels(barrels)
+            random_idx_chance: float = 0.25
+            standard_chance: float = 1.0 - random_idx_chance
 
-    # Offer up for sale in the catalog only the amount of green potions that actually exist currently in inventory.
-    # Done in `catalog.py`
+            prices = np.array([[barrel.price, i] for (i, barrel) in enumerate(barrels)])
+
+            MAX_PRICE = 9999999999
+
+            while can_purchase(barrels):
+                # Roll random chance
+                randomize_idx: bool = np.random.choice(
+                    [True, False], p=[random_idx_chance, standard_chance]
+                )
+
+                if randomize_idx:
+                    idx = int(np.random.rand() * catalog_len)
+                    barrel: Barrel = barrels[idx]
+                    if budget >= barrel.price:
+                        # Purchase just 1 (for diversification' sake)
+                        purchases[idx] += 1
+                        budget -= barrel.price
+                    else:
+                        continue
+                else:
+                    # The standard stuff: choose the barrel with the lowest price
+                    lowest = prices.argmin(axis=0)[0]
+                    lowest_pair = prices[lowest]
+                    (price, idx) = (lowest_pair[0], lowest_pair[1])
+
+                    num_purchases = int(float(budget) / price)
+
+                    # Now purchase as many as possible
+                    purchases[idx] += num_purchases
+                    budget -= num_purchases * price
+
+                    # Instead of popping it out, just set to a max value
+                    prices[lowest, 0] = MAX_PRICE
+
+            return purchases
+
+        policy = restock
+    else:
+        # Purchase the most expensive one that can be afforded
+        def aristocratic(barrels: list[Barrel]) -> list[int]:
+            purchases: list[int] = [0] * catalog_len
+
+            random_idx_chance: float = 0.25
+            standard_chance: float = 1.0 - random_idx_chance
+
+            prices = np.array([[barrel.price, i] for (i, barrel) in enumerate(barrels)])
+
+            MIN_PRICE = 0
+
+            while can_purchase(barrels):
+                # Roll random chance
+                randomize_idx: bool = np.random.choice(
+                    [True, False], p=[random_idx_chance, standard_chance]
+                )
+
+                if randomize_idx:
+                    idx = int(np.random.rand() * catalog_len)
+                    barrel: Barrel = barrels[idx]
+                    if budget >= barrel.price:
+                        # Purchase just 1 (for diversification' sake)
+                        purchases[idx] += 1
+                        budget -= barrel.price
+                    else:
+                        continue
+                else:
+                    # The standard stuff: choose the barrel with the lowest price
+                    highest = prices.argmax(axis=0)[0]
+                    highest_pair = prices[highest]
+                    (price, idx) = (highest_pair[0], highest_pair[1])
+
+                    num_purchases = int(float(budget) / price)
+
+                    # Now purchase as many as possible
+                    purchases[idx] += num_purchases
+                    budget -= num_purchases * price
+
+                    # Instead of popping it out, just set to a max value
+                    prices[highest, 0] = MIN_PRICE
+
+            return purchases
+
+        policy = aristocratic
+
+    # Purchasing SPREE
+    purchases: list[bool] = policy(wholesale_catalog)
+    for barrel, quantity_to_purchase in zip(wholesale_catalog, purchases):
+        if quantity_to_purchase > 0:
+            barrels.append(barrel.with_quantity(quantity_to_purchase))
+
+    if len(barrels) > 0:
+        deliver_barrels(barrels, is_purchase=True)
 
     return [{"sku": barrel.sku, "quantity": barrel.quantity} for barrel in barrels]

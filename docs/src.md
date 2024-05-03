@@ -8,19 +8,19 @@
 
 - **barrels.py** @ router("/barrels")
   
-  - `purchase_barrels(barrels_delivered: list[Barrel])`
+  - ~~`purchase_barrels(barrels_delivered: list[Barrel])`~~
   
-  - `post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int)` @POST("/deliver/{order_id}")
+  - @`post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int)` @POST("/deliver/{order_id}")
   
-  - `get_wholesale_purchase_plan(wholesale_catalog: list[Barrel])` **@POST("/plan")**
+  - @`get_wholesale_purchase_plan(wholesale_catalog: list[Barrel])` **@POST("/plan")**
   
   - <u>NOTE: Barrel Conveyor Belt</u>
 
 - **bottler.py** @ router("/bottler")
   
-  - `post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int)` @POST("/deliver/{order_id})
+  - @`post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int)` @POST("/deliver/{order_id})
   
-  - `get_bottle_plan()` **@POST("/plan")**
+  - @`get_bottle_plan()` **@POST("/plan")**
   
   - <u>NOTE: Bottle Conveyor Belt</u>
 
@@ -28,13 +28,13 @@
   
   - `search_orders(customer_name, potion_sku, search_page, sort_col, sort_order)` @GET("/search/")
   
-  - `post_visits(visit_id: int, customers: list[Customer])` @POST("/visits/{visit_id}")
+  - @`post_visits(visit_id: int, customers: list[Customer])` @POST("/visits/{visit_id}")
   
   - @`create_cart(new_cart: Customer)` @POST("/")
   
   - @`set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem)` @POST("/{cart_id}/items/{item_sku}")
   
-  - `checkout(cart_id: int, cart_checkout: CartCheckout)` @POST("/{cart_id}/checkout")
+  - @`checkout(cart_id: int, cart_checkout: CartCheckout)` @POST("/{cart_id}/checkout")
   
   - <u>NOTE: customer checkout</u>
 
@@ -53,7 +53,7 @@
   
   - @`get_capacity_plan()` **@POST("/plan")**
   
-  - `deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int)` @POST("/deliver/{order_id}")
+  - @`deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int)` @POST("/deliver/{order_id}")
   
   - <u>NOTE: Capacity/Inventory Upgrades Conveyor Belt</u>
 
@@ -63,6 +63,6 @@
 
 2. ~~Translate that into code~~
 
-3. Scan this doc for what is needed for arbitrary number of potions 
+3. ~~Scan this doc for what is needed for arbitrary number of potions~~
 
-4. Turn that into a DB and update the codebase accordingly
+4. ~~Turn that into a DB and update the codebase accordingly~~

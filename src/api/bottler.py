@@ -6,7 +6,12 @@ from src.api import auth
 import sqlalchemy
 from src import database as db
 from src import constants as consts
-from src.schemas.barrels import Barrels
+
+from src.schemas.barrels import Barrels, BarrelSchema
+from src.schemas.potions import Potion, PotionInventory
+
+from src.lib.potion_generation import generate_potions, make_potions_from_mls
+from src.lib import potion_selling, barreling
 
 import numpy as np
 
@@ -18,33 +23,62 @@ router = APIRouter(
 )
 
 
-class PotionInventory(BaseModel):
-    potion_type: list[int]
-    quantity: int
-
-
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
     """ """
     with db.engine.begin() as conn:
-        select_result = conn.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-        row = dict(db.wrap_result_as_global_inventory(select_result.first()))
+        # Generate Potions
+        potions: list[Potion] = generate_potions(potions_delivered)
 
-        current_red_potions = row["num_red_potions"]
-        current_blue_potions = row["num_blue_potions"]
-        current_green_potions = row["num_green_potions"]
-        for potion in potions_delivered:
-            if potion.potion_type == consts.PURE_RED_POTION:
-                current_red_potions += potion.quantity
-            elif potion.potion_type == consts.PURE_BLUE_POTION:
-                current_blue_potions += potion.quantity
-            elif potion.potion_type == consts.PURE_GREEN_POTION:
-                current_green_potions += potion.quantity
+        # Aggregate information
+        orders_tuple_query: str = ""
+        potions_tuple_query: str = ""
+        num_added_potions: int = 0
+        for potion in potions:
+            orders_tuple_query += f"({order_id}, {potion.sku}), "
+            potions_tuple_query += f"({potion.sku}, {potion.red_percent}, {potion.blue_percent}, {potion.green_percent}, {potion.dark_percent}, {potion.quantity}, {consts.INVENTORY_ID}), "
 
-        # Update the DB
+            num_added_potions += potion.quantity
+
+        # remove the ", "
+        potions_tuple_query = potions_tuple_query[:-2]
+        orders_tuple_query = orders_tuple_query[:-2]
+
+        # Algorithm to decide which potions get sold as part of the catalog
+        selling_potions: list[Potion] = potion_selling.put_subset_for_sale(potions)
+
+        selling_potions_tuple_query: str = ""
+        for potion in selling_potions:
+            selling_potions_tuple_query += f"({potion.sku}, {potion_selling.name_potion(potion)}, {potion.quantity}, {potion_selling.price_potion(potion)}), "
+
+        # remove the ", "
+        selling_potions_tuple_query = selling_potions_tuple_query[:-2]
+
+        # Add an order
         conn.execute(
             sqlalchemy.text(
-                f"UPDATE global_inventory SET num_green_potions = {current_green_potions}, num_red_potions = {current_red_potions}, num_blue_potions = {current_blue_potions}"
+                f"INSERT INTO Orders(order_id, order_name) VALUES {orders_tuple_query}"
+            )
+        )
+
+        # Add potions to Potions
+        conn.execute(
+            sqlalchemy.text(
+                f"INSERT INTO Potions(sku, red_percent, blue_percent, green_percent, dark_percent, quantity, inventory_id) VALUES {potions_tuple_query}"
+            )
+        )
+
+        # Add corresponding CatalogPotionItems
+        conn.execute(
+            sqlalchemy.text(
+                f"INSERT INTO CatalogPotionItems(sku, name, quantity, price) VALUES {selling_potions_tuple_query}"
+            )
+        )
+
+        # Add Potions to Inventory
+        conn.execute(
+            sqlalchemy.text(
+                f"UPDATE Inventory SET num_potions = num_potions + {num_added_potions} WHERE id = {consts.INVENTORY_ID}"
             )
         )
 
@@ -69,7 +103,7 @@ def get_bottle_plan():
 
     with db.engine.begin() as conn:
         # FIRST: get total resources of red, blue, green, dark
-        mult: str = "(ml_per_barrel * quantity)"
+        mult: str = "(ml_per_barrel * quantity / 100.0)"
         total_query = f"""
             SELECT sku, red_percent * {mult}, blue_percent * {mult}, green_percent * {mult}, dark_percent * {mult}
             FROM Barrels
@@ -80,37 +114,103 @@ def get_bottle_plan():
             Barrels.wrap_result(result) for result in results
         ]
 
+        # barrel mls in groups organized by row
         barrels_mls: np.ndarray = np.array(
             [barrel_group.extract_ml() for barrel_group in barrels_list]
         )
+
+        # [total_red, total_blue, total_green, total_dark]
         total_mls: np.ndarray = barrels_mls.sum(axis=0)
 
-        # TODO: SECOND: Algorithm to decide which Potions are made from this
+        # SECOND: Algorithm to decide which Potions are made from this
+        (made_potions, used_up_mls) = make_potions_from_mls(total_mls)
 
-        # TODO: THIRD: subtract ml from Inventory/Barrels, insert corresponding Potions
+        # THIRD: subtract ml from Inventory/Barrels, insert corresponding Potions & CatalogPotionItems
+        new_total_mls = total_mls - used_up_mls
 
-        # TODO: FOURTH: Algorithm to decide which of these potions gets to go on the catalog
+        # Barrels
+        # Algorithm to calculate the new barrel set
+        new_barrel_set: list[BarrelSchema] = barreling.stabilize_barrels(new_total_mls)
 
-        # TODO: FIFTH: insert corresponding CatalogPotionItems
+        # Aggregate the results into a str
+        new_barrels_tuple_query: str = ""
+        for new_barrel in new_barrel_set:
+            new_barrels_tuple_query += f"({new_barrel.sku}, {new_barrel.red_percent}, {new_barrel.blue_percent}, {new_barrel.green_percent}, {new_barrel.dark_percent}, {new_barrel.ml_per_barrel}, {new_barrel.quantity}, {new_barrel.inventory_id}), "
 
-        # Update the DB
-        # conn.execute(
-        #     sqlalchemy.text(
-        #         f"UPDATE global_inventory SET num_green_potions = {current_green_potions}, num_green_ml = {current_green_ml}, num_blue_potions = {current_blue_potions}, num_blue_ml = {current_blue_ml}, num_red_potions = {current_red_potions}, num_red_ml = {current_red_ml}"
-        #     )
-        # )
+        # remove the last ", "
+        new_barrels_tuple_query = new_barrels_tuple_query[:-2]
 
-    return [
-        {
-            "potion_type": [0, 0, 100, 0],
-            "quantity": current_green_potions,
-        },
-        {
-            "potion_type": [100, 0, 0, 0],
-            "quantity": current_red_potions,
-        },
-        {
-            "potion_type": [0, 100, 0, 0],
-            "quantity": current_blue_potions,
-        },
-    ]
+        # Delete all barrels and insert these instead
+        conn.execute(
+            sqlalchemy.text(
+                f"DELETE FROM Barrels WHERE inventory_id = {consts.INVENTORY_ID}"
+            )
+        )
+        conn.execute(
+            sqlalchemy.text(
+                f"INSERT INTO Barrels(sku, red_percent, blue_percent, green_percent, dark_percent, ml_per_barrel, quantity, inventory_id) VALUES {new_barrels_tuple_query}"
+            )
+        )
+
+        # Potions
+        potions_tuple_query: str = ""
+        num_added_potions: int = 0
+        for potion in made_potions:
+            potions_tuple_query += f"({potion.sku}, {potion.red_percent}, {potion.blue_percent}, {potion.green_percent}, {potion.dark_percent}, {potion.quantity}, {consts.INVENTORY_ID}), "
+
+            num_added_potions += potion.quantity
+
+        # remove the ", "
+        potions_tuple_query = potions_tuple_query[:-2]
+
+        # Algorithm to decide which potions get sold as part of the catalog
+        selling_potions: list[Potion] = potion_selling.put_subset_for_sale(made_potions)
+
+        selling_potions_tuple_query: str = ""
+        for potion in selling_potions:
+            selling_potions_tuple_query += f"({potion.sku}, {potion_selling.name_potion(potion)}, {potion.quantity}, {potion_selling.price_potion(potion)}), "
+
+        # remove the ", "
+        selling_potions_tuple_query = selling_potions_tuple_query[:-2]
+
+        # Add Potions
+        conn.execute(
+            sqlalchemy.text(
+                f"INSERT INTO Potions(sku, red_percent, blue_percent, green_percent, dark_percent, quantity, inventory_id) VALUES {potions_tuple_query}"
+            )
+        )
+
+        # Add corresponding CatalogPotionItems
+        conn.execute(
+            sqlalchemy.text(
+                f"INSERT INTO CatalogPotionItems(sku, name, quantity, price) VALUES {selling_potions_tuple_query}"
+            )
+        )
+
+        # Inventory
+        conn.execute(
+            sqlalchemy.text(
+                f"""
+                    UPDATE Inventory
+                    SET num_potions = num_potions + {num_added_potions}, red_ml = {new_total_mls[consts.RED]}, blue_ml = {new_total_mls[consts.BLUE]}, green_ml = {new_total_mls[consts.GREEN]}, dark_ml = {new_total_mls[consts.DARK]} 
+                    WHERE id = {consts.INVENTORY_ID}
+                """
+            )
+        )
+
+    return [made_potion.as_potion_inventory() for made_potion in made_potions]
+
+    # return [
+    #     {
+    #         "potion_type": [0, 0, 100, 0],
+    #         "quantity": current_green_potions,
+    #     },
+    #     {
+    #         "potion_type": [100, 0, 0, 0],
+    #         "quantity": current_red_potions,
+    #     },
+    #     {
+    #         "potion_type": [0, 100, 0, 0],
+    #         "quantity": current_blue_potions,
+    #     },
+    # ]

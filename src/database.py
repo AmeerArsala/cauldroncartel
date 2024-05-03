@@ -3,6 +3,7 @@ import dotenv
 import sqlalchemy
 from sqlalchemy import create_engine
 from src.schemas.inventory import Inventory
+import src.constants as consts
 
 
 def database_connection_url():
@@ -21,5 +22,7 @@ def retrieve_inventory() -> Inventory:
         result = connection.execute(sqlalchemy.text("SELECT * FROM Inventory"))
 
     row: Inventory = Inventory.wrap_result(result.first())
+
+    consts.INVENTORY_ID = row.id_
 
     return row
