@@ -28,11 +28,12 @@ def reset():
         )
 
         # Start deleting!!!
-        connection.execute(sqlalchemy.text("DELETE * FROM barrels"))
-        connection.execute(sqlalchemy.text("DELETE * FROM cartitems"))
-        connection.execute(sqlalchemy.text("DELETE * FROM orders"))
-        connection.execute(sqlalchemy.text("DELETE * FROM catalogpotionitems"))
-        connection.execute(sqlalchemy.text("DELETE * FROM potions"))
-        connection.execute(sqlalchemy.text("DELETE * FROM carts"))
+        connection.execute(sqlalchemy.text("DELETE FROM barrels"))
+        connection.execute(sqlalchemy.text("DELETE FROM cartitems"))
+        connection.execute(sqlalchemy.text("DELETE FROM orders"))
+        connection.execute(sqlalchemy.text("DELETE FROM catalogpotionitems"))
+        connection.execute(sqlalchemy.text("DELETE FROM potions"))
+        connection.execute(sqlalchemy.text("DELETE FROM carts"))
+        connection.execute(sqlalchemy.text("DELETE FROM customers"))
 
     return "OK"

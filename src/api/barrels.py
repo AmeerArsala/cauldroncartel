@@ -130,7 +130,7 @@ def deliver_barrels(
                 f"""
                 INSERT INTO barrels({all_barrel_cols}) VALUES {barrel_values_tuples}
                 ON CONFLICT (sku) DO UPDATE
-                SET quantity = quantity + EXCLUDED.quantity
+                SET quantity = barrels.quantity + EXCLUDED.quantity
                 """
             )
         )
@@ -239,6 +239,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             # Do it by finding the lowest prices and going from there but also having a diversity score
 
             purchases: list[int] = [0] * catalog_len
+            max_browse = len(barrels)
 
             random_idx_chance: float = 0.25
             standard_chance: float = 1.0 - random_idx_chance
@@ -246,12 +247,15 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             prices = np.array([[barrel.price, i] for (i, barrel) in enumerate(barrels)])
 
             MAX_PRICE = 9999999999
+            browse: int = 0
 
             while can_purchase(barrels, budget):
                 # Roll random chance
                 randomize_idx: bool = np.random.choice(
                     [True, False], p=[random_idx_chance, standard_chance]
                 )
+
+                chosen_idx: int = 0
 
                 if randomize_idx:
                     idx = int(np.random.rand() * catalog_len)
@@ -260,6 +264,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         # Purchase just 1 (for diversification' sake)
                         purchases[idx] += 1
                         budget -= barrel.price
+
+                        chosen_idx = idx
                     else:
                         continue
                 else:
@@ -268,14 +274,20 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                     lowest_pair = prices[lowest]
                     (price, idx) = (lowest_pair[0], lowest_pair[1])
 
-                    num_purchases = int(float(budget) / price)
+                    num_purchases = np.min(
+                        [int(float(budget) / price), barrels[lowest].quantity]
+                    )
 
                     # Now purchase as many as possible
                     purchases[idx] += num_purchases
                     budget -= num_purchases * price
 
-                    # Instead of popping it out, just set to a max value
-                    prices[lowest, 0] = MAX_PRICE
+                # Instead of popping it out, just set to a max value
+                prices[chosen_idx, 0] = MAX_PRICE
+
+                browse += 1
+                if browse >= max_browse:
+                    break
 
             return purchases
 
@@ -289,14 +301,18 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             standard_chance: float = 1.0 - random_idx_chance
 
             prices = np.array([[barrel.price, i] for (i, barrel) in enumerate(barrels)])
+            max_browse = len(barrels)
 
             MIN_PRICE = 0
+            browse: int = 0
 
             while can_purchase(barrels, budget):
                 # Roll random chance
                 randomize_idx: bool = np.random.choice(
                     [True, False], p=[random_idx_chance, standard_chance]
                 )
+
+                chosen_idx: int = 0
 
                 if randomize_idx:
                     idx = int(np.random.rand() * catalog_len)
@@ -305,22 +321,32 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         # Purchase just 1 (for diversification' sake)
                         purchases[idx] += 1
                         budget -= barrel.price
+
+                        chosen_idx = idx
                     else:
                         continue
                 else:
-                    # The standard stuff: choose the barrel with the lowest price
+                    # The standard stuff: choose the barrel with the highest price
                     highest = prices.argmax(axis=0)[0]
                     highest_pair = prices[highest]
                     (price, idx) = (highest_pair[0], highest_pair[1])
 
-                    num_purchases = int(float(budget) / price)
+                    num_purchases = np.min(
+                        [int(float(budget) / price), barrels[highest].quantity]
+                    )
 
                     # Now purchase as many as possible
                     purchases[idx] += num_purchases
                     budget -= num_purchases * price
 
-                    # Instead of popping it out, just set to a max value
-                    prices[highest, 0] = MIN_PRICE
+                    chosen_idx = highest
+
+                # Instead of popping it out, just set to a min value
+                prices[chosen_idx, 0] = MIN_PRICE
+
+                browse += 1
+                if browse >= max_browse:
+                    break
 
             return purchases
 

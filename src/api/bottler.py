@@ -120,7 +120,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 f"""
                 INSERT INTO potions(sku, red_percent, blue_percent, green_percent, dark_percent, quantity, inventory_id) VALUES {potions_tuple_query}
                 ON CONFLICT (sku) DO UPDATE
-                SET quantity = quantity + EXCLUDED.quantity
+                SET quantity = potions.quantity + EXCLUDED.quantity
                 """
             )
         )
@@ -210,13 +210,15 @@ def get_bottle_plan():
         made_potions = made_potions[:idx]
         potions_tuple_query = potions_tuple_query[:-2]  # remove last ", "
 
+        # print(len(potions_tuple_query))
+
         # Add Potions
         conn.execute(
             sqlalchemy.text(
                 f"""
                 INSERT INTO potions(sku, red_percent, blue_percent, green_percent, dark_percent, quantity, inventory_id) VALUES {potions_tuple_query}
                 ON CONFLICT (sku) DO UPDATE
-                SET quantity = quantity + EXCLUDED.quantity
+                SET quantity = potions.quantity + EXCLUDED.quantity
                 """
             )
         )

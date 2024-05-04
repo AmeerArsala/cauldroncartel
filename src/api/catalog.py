@@ -21,7 +21,7 @@ def get_catalog():
             result = conn.execute(
                 sqlalchemy.text(
                     """
-                    SELECT (catalogpotionitems.sku, name, catalogpotionitems.quantity, price, red_percent, blue_percent, green_percent, dark_percent)
+                    SELECT catalogpotionitems.sku, name, catalogpotionitems.quantity, price, red_percent, blue_percent, green_percent, dark_percent
                     FROM catalogpotionitems INNER JOIN potions ON catalogpotionitems.sku = potions.sku
                     """
                 )

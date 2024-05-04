@@ -7,6 +7,8 @@ import sqlalchemy
 from src import database as db
 from src.schemas.carts import Cart  # CartItem
 
+import numpy as np
+
 
 router = APIRouter(
     prefix="/carts",
@@ -148,7 +150,9 @@ def create_cart(new_cart: Customer):
             )
 
             # redo the customer_id
-            customer_id = conn.execute(sqlalchemy.text(id_query)).first()[0]
+            customer_id = conn.execute(sqlalchemy.text(id_query)).first()
+
+        customer_id = np.array(customer_id).ravel().tolist()[0]
 
         conn.execute(
             sqlalchemy.text(f"INSERT INTO carts(customer_id) VALUES ({customer_id})")
@@ -219,30 +223,31 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 FROM cartitems
                 WHERE cartitems.sku = catalogpotionitems.sku
             ),
-            cleanup_catalogpotionitems AS (
-                DELETE FROM catalogpotionitems
-                WHERE quantity <= 0
-            ),
             update_potions AS (
                 UPDATE potions
                 SET quantity = potions.quantity - cartitems.quantity
                 FROM cartitems
                 WHERE potions.sku = cartitems.sku
             ),
-            cleanup_potions AS (
-                DELETE FROM potions
-                WHERE quantity <= 0
-            )
             UPDATE inventory
             SET gold = gold + {total_gold_paid}, num_potions = num_potions + {total_gold_paid}
         """
 
         conn.execute(sqlalchemy.text(update_query))
 
+        # cleanup
+        conn.execute(
+            sqlalchemy.text("DELETE FROM catalogpotionitems WHERE quantity <= 0")
+        )
+        conn.execute(sqlalchemy.text("DELETE FROM potions WHERE quantity <= 0"))
+
         # Empty cart items
         conn.execute(
             sqlalchemy.text(f"DELETE FROM cartitems WHERE cart_id = {cart_id}")
         )
+
+        # Delete cart
+        conn.execute(sqlalchemy.text(f"DELETE FROM carts WHERE id = {cart_id}"))
 
     return {
         "total_potions_bought": total_potions_bought,
