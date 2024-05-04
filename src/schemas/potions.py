@@ -1,6 +1,7 @@
 from src.schemas import Schema, wrap_result_with_schema
 from pydantic import BaseModel, Field
 import src.constants as consts
+import numpy as np
 
 
 class Potion(Schema):
@@ -22,6 +23,21 @@ class Potion(Schema):
         quantity: int = self.quantity
 
         return PotionInventory(potion_type=potion_type, quantity=quantity)
+
+    def extract_mls(self) -> np.ndarray:
+        ratios = (
+            np.array(
+                [
+                    self.red_percent,
+                    self.blue_percent,
+                    self.green_percent,
+                    self.dark_percent,
+                ]
+            ).astype(float)
+            / 100.0
+        )
+
+        return ratios * consts.ML_PER_BOTTLE
 
     def wrap_result(row: tuple):
         return wrap_result_with_schema(row, Potion)

@@ -50,10 +50,9 @@ def generate_potions(potions_inventory: list[PotionInventory]) -> list[Potion]:
     return potion_list
 
 
-# Returns: tuple[made_potions, used_up_mls]
 # NOTE: SUPER KEY ALGORITHM
 # total_mls = np.array([red, blue, green, dark])
-def make_potions_from_mls(total_mls: np.ndarray) -> tuple[list[Potion], np.ndarray]:
+def make_potions_from_mls(total_mls: np.ndarray) -> list[Potion]:
     # Two Key decisions here:
     # 1: How much should be used
     # 2: Out of how much is being used, how should we choose to distribute what we make?
@@ -99,6 +98,6 @@ def make_potions_from_mls(total_mls: np.ndarray) -> tuple[list[Potion], np.ndarr
         # Subtract from remaining
         remaining_mls -= mls_used
 
-    used_up_mls: np.ndarray = total_mls - remaining_mls
+    # used_up_mls: np.ndarray = total_mls - remaining_mls
 
-    return (made_potions, used_up_mls)
+    return made_potions

@@ -30,41 +30,8 @@ class search_sort_order(str, Enum):
 
 
 class CartItem(BaseModel):
-    sku: str = Field(default="")
+    # sku: str = Field(default="")
     quantity: int
-
-
-# class Cart(BaseModel):
-#     cart_id: int = Field(default_factory=lambda: np.random.randint(MAX_CARTS))
-#     cart_items: dict[str, CartItem] = Field(default={})
-#
-#     # If `name_starts_with` is left blank, it will just count all items
-#     def total_num_items(self, name_starts_with: str = "") -> int:
-#         num_items: int = 0
-#         for cart_item in self.cart_items.values():
-#             if name_starts_with == "" or cart_item.sku.startswith(name_starts_with):
-#                 num_items += cart_item.quantity
-#
-#         return num_items
-#
-#     def total_price(self) -> int:
-#         price: int = 0
-#         full_catalog: list[dict[str, str]] = catalog.get_catalog()
-#
-#         def find_catalog_item(sku: str):
-#             for item in full_catalog:
-#                 if item["sku"] == sku:
-#                     return item
-#
-#             return {"price": 0}  # default value
-#
-#         for cart_item in self.cart_items.values():
-#             price += find_catalog_item(cart_item.sku)["price"] * cart_item.quantity
-#
-#         return price
-#
-#     def as_str(self) -> str:
-#         return {"cart_id": f"{self.cart_id:.0f}", "cart_items": self.cart_items}
 
 
 class Customer(BaseModel):
@@ -193,7 +160,17 @@ def create_cart(new_cart: Customer):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
+    should_delete_item: bool = cart_item.quantity == 0
+
     with db.engine.begin() as conn:
+        if should_delete_item:
+            conn.execute(
+                sqlalchemy.text(
+                    f"DELETE FROM cartitems WHERE cart_id = {cart_id} AND sku = '{item_sku}'"
+                )
+            )
+            return "OK"
+
         find_query: str = (
             f"SELECT * FROM cartitems WHERE cart_id = {cart_id} AND sku = '{item_sku}'"
         )
@@ -236,29 +213,28 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         # Apply difference in potion items from cart
         # Update inventory gold
         update_query = f"""
-            WITH update_one AS (
+            WITH update_catalogpotionitems AS (
                 UPDATE catalogpotionitems
                 SET quantity = catalogpotionitems.quantity - cartitems.quantity
                 FROM cartitems
                 WHERE cartitems.sku = catalogpotionitems.sku
             ),
-            update_two AS (
+            cleanup_catalogpotionitems AS (
+                DELETE FROM catalogpotionitems
+                WHERE quantity <= 0
+            ),
+            update_potions AS (
                 UPDATE potions
                 SET quantity = potions.quantity - cartitems.quantity
                 FROM cartitems
                 WHERE potions.sku = cartitems.sku
+            ),
+            cleanup_potions AS (
+                DELETE FROM potions
+                WHERE quantity <= 0
             )
             UPDATE inventory
             SET gold = gold + {total_gold_paid}, num_potions = num_potions + {total_gold_paid}
-        """
-
-        f"""
-        UPDATE cartitems 
-        INNER JOIN catalogpotionitems ON cartitems.sku = catalogpotionitems.sku
-        INNER JOIN potions ON catalogpotionitems.sku = potions.sku
-        INNER JOIN inventory ON potions.inventory_id = inventory.id
-        SET catalogpotionitems.quantity = catalogpotionitems.quantity - cartitems.quantity, potions.quantity = potions.quantity - cartitems.quantity, inventory.gold = inventory.gold + {total_gold_paid}, inventory.num_potions = inventory.num_potions + {total_gold_paid}
-        WHERE cartitems.cart_id = {cart_id}
         """
 
         conn.execute(sqlalchemy.text(update_query))

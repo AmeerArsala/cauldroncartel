@@ -1,6 +1,7 @@
 from uuid import UUID
 from pydantic import BaseModel
 from src.schemas import Schema, wrap_result_with_schema
+from src import constants as consts
 
 
 class Inventory(Schema):
@@ -16,6 +17,12 @@ class Inventory(Schema):
 
     def calculate_total_mls(self):
         return self.red_ml + self.blue_ml + self.green_ml + self.dark_ml
+
+    def num_potions_capacity(self):
+        return self.potion_capacity * consts.POTIONS_PER_CAPACITY_POINT
+
+    def num_ml_capacity(self):
+        return self.ml_capacity * consts.ML_PER_CAPACITY_POINT
 
     def wrap_result(row: tuple):
         return wrap_result_with_schema(row, Inventory)

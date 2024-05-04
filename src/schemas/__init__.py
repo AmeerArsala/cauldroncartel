@@ -15,7 +15,7 @@ class Schema(BaseModel, abc.ABC):
 
     def as_tuple_value_str(self) -> str:
         obj_dict: dict = self.dict()
-        keys: list[str] = list(obj_dict.keys())
+        # keys: list[str] = list(obj_dict.keys())
         vals = list(obj_dict.values())
 
         # for exclude_key in exclude_keys:

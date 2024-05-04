@@ -59,14 +59,22 @@
 
 # TODO
 
-1. On Insert Potion, check to see if it already exists. If so, just add another one. In general, deal with quantities
+1. On Insert Potion, check to see if it already exists. If so, just add another one. In general, deal with quantities (including carts)
 
-2. Ledgers
+2. Limits on Potions and mL as capacity
 
-3. Search Bar
+3. Ledgers
 
-4. `post_time`
+4. Search Bar
 
-5. `reset`
+5. `post_time`
 
-6. Update this doc
+6. `reset` for the new era (not global_inventory)
+
+7. `schema.sql`
+
+8. Optimize algorithms to be simple yet time series forecast
+
+9. Update this doc
+
+

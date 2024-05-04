@@ -5,10 +5,19 @@ import random
 
 
 # Will also need information on what's already on sale
-# But for now, you can just have it be everything
-# NOTE: KEY ALGORITHM
+# NOTE: SUPER KEY ALGORITHM
 def put_subset_for_sale(potions: list[Potion]) -> list[Potion]:
-    return potions[:]
+    # For now just choose 6 random ones
+    CATALOG_LENGTH = 6
+
+    if len(potions) > CATALOG_LENGTH:
+        potions_for_sale: list[Potion] = np.random.choice(
+            potions, size=CATALOG_LENGTH, replace=False
+        ).tolist()
+
+        return potions_for_sale
+    else:
+        return potions
 
 
 def name_potion(potion: Potion) -> str:

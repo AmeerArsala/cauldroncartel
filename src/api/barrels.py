@@ -70,6 +70,11 @@ def deliver_barrels(
         barrel.to_barrel_schema() for barrel in barrels_delivered
     ]
 
+    inventory_row: Inventory = db.retrieve_inventory()
+    max_added_mls: int = (
+        inventory_row.num_ml_capacity() - inventory_row.calculate_total_mls()
+    )
+
     # Purchase will add an order + subtract gold from inventory
 
     # Otherwise, to deliver, here are the steps:
@@ -78,7 +83,39 @@ def deliver_barrels(
 
     with db.engine.begin() as conn:
         # Insert the barrels into Barrels
-        barrel_cols: str = barrel_schemas_delivered[0].keys_as_str()
+
+        idx = 0
+        total_ml_added_scalar: int = 0
+        for barrel_schema in barrel_schemas_delivered:
+            should_break: bool = False
+
+            if (
+                total_ml_added_scalar + barrel_schema.calculate_total_mls_value()
+                >= max_added_mls
+            ):
+                # Attempt to fit a quantity
+                local_ml_capacity: int = max_added_mls - total_ml_added_scalar
+                quantity: int = np.min(
+                    [
+                        int(float(local_ml_capacity) / barrel_schema.ml_per_barrel),
+                        barrel_schema.quantity,
+                    ]
+                )
+
+                if quantity > 0:
+                    barrel_schema.quantity = quantity
+                else:
+                    # Otherwise, don't add it at all and just break
+                    break
+
+                should_break = True
+
+            total_ml_added_scalar += barrel_schema.calculate_total_mls_value()
+            idx += 1
+            if should_break:
+                break
+
+        all_barrel_cols: str = barrel_schemas_delivered[0].keys_as_str()
         barrel_values_tuples: str = ",".join(
             [
                 barrel_schema.as_tuple_value_str()
@@ -90,7 +127,11 @@ def deliver_barrels(
 
         conn.execute(
             sqlalchemy.text(
-                f"INSERT INTO barrels({barrel_cols}) VALUES {barrel_values_tuples}"
+                f"""
+                INSERT INTO barrels({all_barrel_cols}) VALUES {barrel_values_tuples}
+                ON CONFLICT (sku) DO UPDATE
+                SET quantity = quantity + EXCLUDED.quantity
+                """
             )
         )
 

@@ -1,5 +1,7 @@
 from src.schemas import Schema, wrap_result_with_schema
 
+# from .potions import Potion
+
 
 class CatalogItem(Schema):
     sku: str
@@ -14,3 +16,13 @@ class CatalogItem(Schema):
 
     def wrap_result(row: tuple):
         return wrap_result_with_schema(row, CatalogItem)
+
+
+class CatalogPotionItem(Schema):
+    sku: str
+    name: str
+    quantity: int
+    price: int
+
+    def wrap_result(row: tuple):
+        return wrap_result_with_schema(row, CatalogPotionItem)

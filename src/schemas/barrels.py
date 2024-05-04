@@ -71,6 +71,9 @@ class BarrelSchema(Schema):
 
         return potion_proportions * self.ml_per_barrel * self.quantity
 
+    def calculate_total_mls_value(self):
+        return self.ml_per_barrel * self.quantity
+
     def to_barrels(self) -> Barrels:
         total_mls: np.ndarray = self.calculate_total_mls()
         return Barrels(
