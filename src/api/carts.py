@@ -6,6 +6,7 @@ from enum import Enum
 import sqlalchemy
 from src import database as db
 from src.schemas.carts import Cart  # CartItem
+from src.schemas.searchresults import SearchResult
 
 import numpy as np
 
@@ -46,14 +47,22 @@ class CartCheckout(BaseModel):
     payment: str
 
 
-# carts: dict[int, Cart] = {}
+# line_temp_id: int = 0
+#
+#
+# def gen_id():
+#     global line_temp_id
+#
+#     line_temp_id += 1
+#
+#     return line_temp_id
 
 
 @router.get("/search/", tags=["search"])
 def search_orders(
     customer_name: str = "",
     potion_sku: str = "",
-    search_page: str = "",
+    search_page: int = 1,
     sort_col: search_sort_options = search_sort_options.timestamp,
     sort_order: search_sort_order = search_sort_order.desc,
 ):
@@ -82,18 +91,73 @@ def search_orders(
     time is 5 total line items.
     """
 
+    PREV_PAGE_TOKEN = search_page - 1
+    NEXT_PAGE_TOKEN = search_page + 1
+
+    ITEMS_PER_PAGE = 5  # change later
+    # offset: int = (search_page - 1) * ITEMS_PER_PAGE
+
+    first_idx: int = (search_page - 1) * ITEMS_PER_PAGE
+    last_idx: int = (search_page * ITEMS_PER_PAGE) - 1
+
+    # Normalize options
+    order_by: str = str(sort_order).upper()
+    sort_by_col: str = ""
+    if sort_col == search_sort_options.item_sku:
+        sort_by_col = "cartitems.sku"
+    elif sort_col == search_sort_options.customer_name:
+        sort_by_col = "customers.name"
+    elif sort_col == search_sort_options.line_item_total:
+        sort_by_col = "line_item_total"
+    elif sort_col == search_sort_options.timestamp:
+        sort_by_col = "cartitems.timestamp"
+
+    with db.engine.begin() as conn:
+        query: str = """
+                SELECT ROW_NUMBER() OVER () AS line_item_id, cartitems.sku, customers.name, (cartitems.quantity * catalogpotionitems.price) AS line_item_total, cartitems.timestamp
+                FROM cartitems
+                INNER JOIN carts ON cartitems.cart_id = carts.id
+                INNER JOIN customers ON carts.customer_id = customers.id
+                INNER JOIN catalogpotionitems ON cartitems.sku = catalogpotionitems.sku
+                WHERE customers.name = :name AND cartitems.sku = :sku"""
+
+        if len(sort_by_col) > 0:
+            query += f"""
+                ORDER BY {sort_by_col} {order_by}
+            """
+
+        # NOTE: I removed this to deal with a degenerate case
+        # query += """
+        #     LIMIT :results_per_page OFFSET :offset
+        # """
+
+        results = conn.execute(
+            sqlalchemy.text(
+                query,
+                [
+                    {"name": customer_name, "sku": potion_sku}
+                ],  # "results_per_page": ITEMS_PER_PAGE, "offset": offset
+            )
+        )
+
+        full_search_results: list[SearchResult] = [
+            SearchResult.wrap_result(result) for result in results
+        ]
+
+        # Time to include the paging in the postprocessing as to not screw with the degenerate case
+        # Who cares about overfetching!!! Who cares about the environment!!!
+        # I'd be using GraphQL if I did!!!
+        has_prev_page: bool = search_page > 1
+        has_next_page: bool = last_idx < len(full_search_results)
+
+        search_results: list[SearchResult] = full_search_results[
+            first_idx : (last_idx + 1)
+        ]
+
     return {
-        "previous": "",
-        "next": "",
-        "results": [
-            {
-                "line_item_id": 1,
-                "item_sku": "1 oblivion potion",
-                "customer_name": "Scaramouche",
-                "line_item_total": 50,
-                "timestamp": "2021-01-01T00:00:00Z",
-            }
-        ],
+        "previous": PREV_PAGE_TOKEN if has_prev_page else None,
+        "next": NEXT_PAGE_TOKEN if has_next_page else None,
+        "results": search_results,
     }
 
 
