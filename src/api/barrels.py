@@ -34,6 +34,9 @@ class Barrel(BaseModel):
 
         return potion_proportions * self.ml_per_barrel * self.quantity
 
+    def calculate_total_mls_value(self) -> int:
+        return self.ml_per_barrel * self.quantity
+
     def calculate_total_price(self) -> int:
         return self.price * self.quantity
 
@@ -66,9 +69,9 @@ class Barrel(BaseModel):
 def deliver_barrels(
     barrels_delivered: list[Barrel], is_purchase: bool = False, order_id=None
 ):
-    barrel_schemas_delivered: list[BarrelSchema] = [
-        barrel.to_barrel_schema() for barrel in barrels_delivered
-    ]
+    # barrel_schemas_delivered: list[BarrelSchema] = [
+    #     barrel.to_barrel_schema() for barrel in barrels_delivered
+    # ]
 
     inventory_row: Inventory = db.retrieve_inventory()
     max_added_mls: int = (
@@ -84,51 +87,54 @@ def deliver_barrels(
     with db.engine.begin() as conn:
         # Insert the barrels into Barrels
 
+        # Put a ceil on the number of ml that could be added
         idx = 0
         total_ml_added_scalar: int = 0
-        for barrel_schema in barrel_schemas_delivered:
+        for barrel in barrels_delivered:
             should_break: bool = False
 
             if (
-                total_ml_added_scalar + barrel_schema.calculate_total_mls_value()
+                total_ml_added_scalar + barrel.calculate_total_mls_value()
                 >= max_added_mls
             ):
                 # Attempt to fit a quantity
                 local_ml_capacity: int = max_added_mls - total_ml_added_scalar
                 quantity: int = np.min(
                     [
-                        int(float(local_ml_capacity) / barrel_schema.ml_per_barrel),
-                        barrel_schema.quantity,
+                        int(float(local_ml_capacity) / barrel.ml_per_barrel),
+                        barrel.quantity,
                     ]
                 )
 
                 if quantity > 0:
-                    barrel_schema.quantity = quantity
+                    barrel.quantity = quantity
                 else:
                     # Otherwise, don't add it at all and just break
                     break
 
                 should_break = True
 
-            total_ml_added_scalar += barrel_schema.calculate_total_mls_value()
+            total_ml_added_scalar += barrel.calculate_total_mls_value()
             idx += 1
             if should_break:
                 break
 
-        all_barrel_cols: str = barrel_schemas_delivered[0].keys_as_str()
+        barrels_delivered = barrels_delivered[:idx]
+
         barrel_values_tuples: str = ",".join(
             [
-                barrel_schema.as_tuple_value_str()
-                for barrel_schema in barrel_schemas_delivered
+                barrel.to_barrel_schema().as_tuple_value_str()
+                for barrel in barrels_delivered
             ]
         )
 
-        print(barrel_values_tuples)
+        # print(barrel_values_tuples)
 
+        # Now actually add the barrels in
         conn.execute(
             sqlalchemy.text(
                 f"""
-                INSERT INTO barrels({all_barrel_cols}) VALUES {barrel_values_tuples}
+                INSERT INTO barrels(sku, red_percent, blue_percent, green_percent, dark_percent, ml_per_barrel, quantity, inventory_id) VALUES {barrel_values_tuples}
                 ON CONFLICT (sku) DO UPDATE
                 SET quantity = barrels.quantity + EXCLUDED.quantity
                 """
