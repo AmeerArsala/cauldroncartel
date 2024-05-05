@@ -70,7 +70,7 @@ def get_capacity_plan():
         inventory_row.potion_capacity * consts.POTIONS_PER_CAPACITY_POINT
     ):
         # Purchase another point if possible
-        if inventory_row.gold >= consts.POTIONS_PER_CAPACITY_POINT:
+        if inventory_row.gold >= 1000:
             capacity_purchase.potion_capacity = 1
 
     if inventory_row.calculate_total_mls() >= (
@@ -78,20 +78,21 @@ def get_capacity_plan():
     ):
         # Purchase another point if possible
         if capacity_purchase.potion_capacity == 0:
-            if inventory_row.gold >= consts.ML_PER_CAPACITY_POINT:
+            if inventory_row.gold >= 1000:
                 capacity_purchase.ml_capacity = 1
         else:
             if inventory_row.gold >= (
-                consts.ML_PER_CAPACITY_POINT
-                + (
-                    capacity_purchase.potion_capacity
-                    * consts.POTIONS_PER_CAPACITY_POINT
-                )
+                (capacity_purchase.ml_capacity * 1000)
+                + (capacity_purchase.potion_capacity * 1000)
             ):
                 capacity_purchase.ml_capacity = 1
 
     if capacity_purchase.potion_capacity > 0 or capacity_purchase.ml_capacity > 0:
+        # Check if there is enough gold
         purchase_capacity(capacity_purchase)
+
+        inventory_row.potion_capacity += capacity_purchase.potion_capacity
+        inventory_row.ml_capacity += capacity_purchase.ml_capacity
 
     return {
         "potion_capacity": inventory_row.potion_capacity
