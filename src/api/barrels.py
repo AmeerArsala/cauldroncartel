@@ -30,9 +30,9 @@ class Barrel(BaseModel):
     quantity: int
 
     def calculate_total_mls(self) -> np.ndarray:
-        potion_proportions = np.array(self.potion_type) / 100.0
+        potion_proportions = np.array(self.potion_type)  # .astype(float) / 100.0
 
-        return potion_proportions * self.ml_per_barrel * self.quantity
+        return potion_proportions * self.ml_per_barrel * self.quantity  # .astype(int)
 
     def calculate_total_mls_value(self) -> int:
         return self.ml_per_barrel * self.quantity
@@ -147,6 +147,9 @@ def deliver_barrels(
             [barrel.calculate_total_mls() for barrel in barrels_delivered]
         )
         total_mls_added: np.ndarray = total_mls_added_by_row.sum(axis=0)
+
+        print(total_ml_added_scalar)
+        print(total_mls_added)
 
         # Update Inventory's stats
         update_query: str = f"""

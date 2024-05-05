@@ -109,19 +109,21 @@ TODO: put tick/day frequency for each one of these
 
 5. Ledgers
 
-6. Have checkout delete the cart
+6. ~~Have checkout delete the cart~~
 
-7. Search Bar
+7. ~~Have all potions/catalogpotionitems that go to 0 be deleted~~
 
-8. ~~`post_time`~~
+8. ~~Search Bar~~
 
-9. ~~`reset` for the new era (not global_inventory)~~
+9. ~~`post_time`~~
 
-10. `schema.sql`
+10. ~~`reset` for the new era (not global_inventory)~~
 
-11. Optimize algorithms to be simple yet time series forecast
+11. `schema.sql`
 
-12. Update this doc
+12. Optimize algorithms to be simple yet time series forecast
+
+13. Update this doc
 
 
 
