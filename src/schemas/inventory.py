@@ -18,6 +18,9 @@ class Inventory(Schema):
     def calculate_total_mls(self):
         return self.red_ml + self.blue_ml + self.green_ml + self.dark_ml
 
+    def get_mls(self):
+        return [self.red_ml, self.blue_ml, self.green_ml, self.dark_ml]
+
     def num_potions_capacity(self):
         return self.potion_capacity * consts.POTIONS_PER_CAPACITY_POINT
 

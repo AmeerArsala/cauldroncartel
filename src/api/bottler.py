@@ -160,25 +160,26 @@ def get_bottle_plan():
 
     with db.engine.begin() as conn:
         # FIRST: get total resources of red, blue, green, dark
-        mult: str = "(ml_per_barrel * quantity / 100.0)"
-        total_query = f"""
-            SELECT sku, red_percent * {mult}, blue_percent * {mult}, green_percent * {mult}, dark_percent * {mult}
-            FROM barrels
-        """
-
-        results = conn.execute(sqlalchemy.text(total_query)).fetchall()
-        barrels_list: list[Barrels] = [
-            Barrels.wrap_result(result) for result in results
-        ]
-
-        # barrel mls in groups organized by row
-        barrels_mls: np.ndarray = np.array(
-            [barrel_group.extract_ml() for barrel_group in barrels_list]
-        )
+        # mult: str = "(ml_per_barrel * quantity / 100.0)"
+        # total_query = f"""
+        #     SELECT sku, red_percent * {mult}, blue_percent * {mult}, green_percent * {mult}, dark_percent * {mult}
+        #     FROM barrels
+        # """
+        #
+        # results = conn.execute(sqlalchemy.text(total_query)).fetchall()
+        # barrels_list: list[Barrels] = [
+        #     Barrels.wrap_result(result) for result in results
+        # ]
+        #
+        # # barrel mls in groups organized by row
+        # barrels_mls: np.ndarray = np.array(
+        #     [barrel_group.extract_ml() for barrel_group in barrels_list]
+        # )
 
         # HERE!
         # [total_red, total_blue, total_green, total_dark]
-        total_mls: np.ndarray = barrels_mls.sum(axis=0)
+        # total_mls: np.ndarray = barrels_mls.sum(axis=0)
+        total_mls: np.ndarray = np.array(inventory_row.get_mls())
 
         # SECOND: Algorithm to decide which Potions are made from this
         made_potions: list[Potion] = make_potions_from_mls(total_mls)
