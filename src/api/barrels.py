@@ -32,10 +32,12 @@ class Barrel(BaseModel):
     def calculate_total_mls(self) -> np.ndarray:
         potion_proportions = np.array(self.potion_type)  # .astype(float) / 100.0
 
-        return potion_proportions * self.ml_per_barrel * self.quantity  # .astype(int)
+        return (
+            potion_proportions * self.ml_per_barrel
+        )  # * self.quantity  # .astype(int)
 
     def calculate_total_mls_value(self) -> int:
-        return self.ml_per_barrel * self.quantity
+        return self.ml_per_barrel  # * self.quantity
 
     def calculate_total_price(self) -> int:
         return self.price * self.quantity
