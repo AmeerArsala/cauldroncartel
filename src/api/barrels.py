@@ -90,38 +90,14 @@ def deliver_barrels(
         # Insert the barrels into Barrels
 
         # Put a ceil on the number of ml that could be added
-        idx = 0
         total_ml_added_scalar: int = 0
+        added_barrels: list[Barrel] = []
         for barrel in barrels_delivered:
-            should_break: bool = False
+            if total_ml_added_scalar + barrel.ml_per_barrel <= max_added_mls:
+                total_ml_added_scalar += barrel.ml_per_barrel
+                added_barrels.append(barrel)
 
-            if (
-                total_ml_added_scalar + barrel.calculate_total_mls_value()
-                >= max_added_mls
-            ):
-                # Attempt to fit a quantity
-                local_ml_capacity: int = max_added_mls - total_ml_added_scalar
-                quantity: int = np.min(
-                    [
-                        int(float(local_ml_capacity) / barrel.ml_per_barrel),
-                        barrel.quantity,
-                    ]
-                )
-
-                if quantity > 0:
-                    barrel.quantity = quantity
-                else:
-                    # Otherwise, don't add it at all and just break
-                    break
-
-                should_break = True
-
-            total_ml_added_scalar += barrel.calculate_total_mls_value()
-            idx += 1
-            if should_break:
-                break
-
-        barrels_delivered = barrels_delivered[:idx]
+        barrels_delivered = added_barrels
 
         barrel_values_tuples: str = ",".join(
             [
