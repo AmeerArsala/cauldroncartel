@@ -39,6 +39,17 @@ class Potion(Schema):
 
         return ratios * consts.ML_PER_BOTTLE
 
+    def with_quantity(self, q: int):
+        return Potion(
+            sku=self.sku,
+            red_percent=self.red_percent,
+            blue_percent=self.blue_percent,
+            green_percent=self.green_percent,
+            dark_percent=self.dark_percent,
+            quantity=q,
+            inventory_id=self.inventory_id,
+        )
+
     def wrap_result(row: tuple):
         return wrap_result_with_schema(row, Potion)
 

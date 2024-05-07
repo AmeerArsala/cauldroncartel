@@ -171,6 +171,22 @@ def get_bottle_plan():
     if len(made_potions) == 0:
         return []
 
+    # Make sure the same potions don't intersect by collapsing them into quantities
+    skus: list[str] = [potion.sku for potion in made_potions]
+    collapsed_skus: list[str] = []
+    collapsed_made_potions: list[Potion] = []
+    for i, sku in enumerate(skus):
+        if sku in collapsed_skus:
+            continue
+
+        quantity = skus.count(sku)
+        potion = made_potions[i]
+
+        collapsed_made_potions.append(potion.with_quantity(quantity))
+        collapsed_skus.append(sku)
+
+    made_potions = collapsed_made_potions
+
     with db.engine.begin() as conn:
         # Hey! This is kinda like a Ledger!!!
         def get_total_mls_used(potions: list[Potion]):
